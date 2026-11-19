@@ -10,8 +10,8 @@
 // ==============================================================================
 
 export const ENV = {
-  // 1. Backend Express API Endpoint
-  apiBaseUrl: (typeof process !== 'undefined' && process.env && process.env.API_BASE_URL) || 'http://localhost:5000/api',
+  // 1. Backend Express API Endpoint (Hosted live on Render)
+  apiBaseUrl: (typeof process !== 'undefined' && process.env && process.env.API_BASE_URL) || 'https://smart-laundry-locker-api.onrender.com/api',
 
   // 2. Kiosk Station Identity
   stationId: (typeof process !== 'undefined' && process.env && process.env.LOCKER_STATION_ID) || 'CMH-01',
