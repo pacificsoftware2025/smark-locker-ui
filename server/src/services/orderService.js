@@ -29,12 +29,9 @@ export async function createDropoffOrder(data) {
     compartmentNumber,
   } = data;
 
-  // If kiosk passed a preferred compartment, verify it; otherwise allocate dynamically
-  let assignedBox = compartmentNumber;
-  if (!assignedBox) {
-    const allocated = await allocateCompartment(stationId, serviceSize);
-    assignedBox = allocated.box_number;
-  }
+  // Always dynamically allocate the next available locker from database matching load size
+  const allocated = await allocateCompartment(stationId, serviceSize);
+  const assignedBox = allocated.box_number;
 
   const orderId = generateOrderId();
 

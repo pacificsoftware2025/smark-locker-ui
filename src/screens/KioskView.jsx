@@ -99,8 +99,6 @@ export function KioskView() {
       customerName: sessionOrder.customerName,
       contactNumber: sessionOrder.contactNumber,
       stationId: stationId,
-      compartmentNumber: requestedBox,
-      dropoffBoxNumber: requestedBox,
       serviceTier: orderData.serviceTier,
       serviceSize: orderData.serviceSize,
       temperature: orderData.temperature,
@@ -111,9 +109,9 @@ export function KioskView() {
 
     console.log('[KioskView] Submitting Drop-off Order to API:', customerOrderPayload);
 
-    // Call Backend API with automatic offline resilience
+    // Call Backend API with automatic dynamic box allocation
     const apiResponse = await submitDropoffOrder(customerOrderPayload);
-    const assignedCompartment = apiResponse.compartmentNumber || requestedBox;
+    const assignedCompartment = apiResponse.compartmentNumber || '01';
     const boxNumber = parseInt(assignedCompartment, 10);
     const boardId = 1;
 

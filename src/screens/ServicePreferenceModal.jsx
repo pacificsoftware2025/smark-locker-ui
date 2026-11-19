@@ -86,7 +86,7 @@ export function ServicePreferenceModal(props) {
                 </View>
                 
                 <View style={styles.boxBadge}>
-                  <Text style={styles.boxText}>Compartment #{assignedBox}</Text>
+                  <Text style={styles.boxText}>{selectedSize} Compartment</Text>
                 </View>
               </View>
 
@@ -305,7 +305,7 @@ export function ServicePreferenceModal(props) {
               {isUnlocking ? (
                 <View style={styles.unlockingRow}>
                   <ActivityIndicator color={COLORS.white} size="small" />
-                  <Text style={styles.unlockBtnText}>Opening Box #{assignedBox}...</Text>
+                  <Text style={styles.unlockBtnText}>Allocating & Opening Locker...</Text>
                 </View>
               ) : (
                 <View style={styles.unlockingRow}>
