@@ -1,0 +1,23 @@
+{
+  "name": "locker-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Smart Locker Kiosk Touchscreen Application built with React Native Bare Workflow",
+  "scripts": {
+    "web": "vite --config web/vite.config.js",
+    "start": "react-native start",
+    "android": "react-native run-android"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-native": "0.76.1",
+    "react-native-web": "^0.19.13"
+  },
+  "devDependencies": {
+    "@react-native-community/cli": "^15.0.1",
+    "@react-native/metro-config": "^0.76.9",
+    "@vitejs/plugin-react": "^4.7.0",
+    "vite": "^6.4.5"
+  }
+}

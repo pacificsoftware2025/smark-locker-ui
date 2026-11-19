@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Android builds
+android/app/build/
+android/.gradle/
+android/build/
+android/app/*.keystore
+android/app/*.jks
+*.apk
+*.aab
+
+# Metro Bundler Cache
+.metro/
+.cache/
+
+# Vite Cache
+dist/
+dist-ssr/
+*.local
+
+# Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

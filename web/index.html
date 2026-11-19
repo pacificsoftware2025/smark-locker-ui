@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Smart Locker Kiosk - Portrait Preview</title>
+    <!-- Load Inter font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        user-select: none;
+      }
+      body {
+        background-color: #020617;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        padding: 16px;
+      }
+      /* Simulated Physical Tablet Kiosk Frame */
+      #kiosk-bezel {
+        width: 100%;
+        max-width: 520px;
+        height: 94vh;
+        max-height: 960px;
+        background-color: #0f172a;
+        border-radius: 28px;
+        padding: 14px;
+        box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.1);
+        display: flex;
+        flex-direction: column;
+      }
+      #kiosk-screen {
+        flex: 1;
+        background-color: #0f172a;
+        border-radius: 18px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+      }
+      #root {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="kiosk-bezel">
+      <div id="kiosk-screen">
+        <div id="root"></div>
+      </div>
+    </div>
+    <script type="module" src="./entry.jsx"></script>
+  </body>
+</html>
