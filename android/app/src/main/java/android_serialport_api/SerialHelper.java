@@ -1,7 +1,7 @@
 package android_serialport_api;
 import android.util.Log;
 
-import com.aituolink.smartbox.Public;
+// Public.java is in same package android_serialport_api
 
 import java.io.File;
 import java.io.IOException;

@@ -66,11 +66,11 @@ public class LockerModule extends ReactContextBaseJavaModule {
             int pulse = timeoutMs > 0 ? timeoutMs : 200;
             SerialControl.ResultMsg result = SerialServer.getInstance().OpenBox(boardId, doorNumber, pulse);
 
-            if (result != null && result.errType == SerialControl.ErrorType.No_Error) {
+            if (result != null && result.getErrType() == SerialControl.ErrorType.No_Error) {
                 Log.i(TAG, "Successfully unlocked Board: " + boardId + ", Door: " + doorNumber);
                 promise.resolve("SUCCESS");
             } else {
-                String errMsg = result != null ? result.errMsg : "Unknown hardware error";
+                String errMsg = result != null ? result.getErrMsg() : "Unknown hardware error";
                 Log.w(TAG, "Hardware returned error: " + errMsg);
                 // Return success in demo/mock fallback if hardware not physically attached
                 promise.resolve("SUCCESS_FALLBACK");
@@ -90,8 +90,8 @@ public class LockerModule extends ReactContextBaseJavaModule {
         try {
             ensureInitialized();
             SerialControl.ResultMsg result = SerialServer.getInstance().IsBoxOpen(boardId, doorNumber, 200);
-            if (result != null && result.errType == SerialControl.ErrorType.No_Error) {
-                boolean isOpen = result.value == SerialControl.LockStatus.Open;
+            if (result != null && result.getErrType() == SerialControl.ErrorType.No_Error) {
+                boolean isOpen = result.getValue() == SerialControl.LockStatus.Open;
                 promise.resolve(isOpen);
             } else {
                 promise.resolve(false);
