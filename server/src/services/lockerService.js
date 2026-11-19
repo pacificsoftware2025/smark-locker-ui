@@ -85,3 +85,25 @@ export async function markCompartmentAvailable(stationId, boxNumber) {
   const result = await query(sql, [stationId, boxNumber]);
   return result.rows[0];
 }
+
+// Fetches live full compartment status and active order details for Operator telemetry
+export async function getStationCompartments(stationId) {
+  const sql = `
+    SELECT 
+      c.box_number,
+      c.size,
+      c.status,
+      c.current_order_id,
+      o.customer_name,
+      o.customer_phone,
+      o.service_tier,
+      o.service_size,
+      o.created_at AS dropped_time
+    FROM locker_compartments c
+    LEFT JOIN orders o ON c.current_order_id = o.id
+    WHERE c.station_id = $1
+    ORDER BY c.box_number ASC;
+  `;
+  const result = await query(sql, [stationId]);
+  return result.rows;
+}

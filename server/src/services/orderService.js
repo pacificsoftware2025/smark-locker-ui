@@ -142,3 +142,75 @@ export async function getOrderById(orderId) {
   const result = await query(sql, [orderId]);
   return result.rows[0] || null;
 }
+
+// Lists all orders with optional status filter for Operator Dashboard
+export async function listOrders(statusFilter) {
+  let sql = 'SELECT * FROM orders';
+  const params = [];
+  if (statusFilter) {
+    sql += ' WHERE status = $1';
+    params.push(statusFilter);
+  }
+  sql += ' ORDER BY created_at DESC LIMIT 50;';
+  const result = await query(sql, params);
+  return result.rows;
+}
+
+// Driver collects dirty laundry from locker compartment
+export async function collectOrderByDriver(orderId) {
+  const orderResult = await query('SELECT * FROM orders WHERE id = $1', [orderId]);
+  if (orderResult.rows.length === 0) {
+    throw new Error('Order not found');
+  }
+  const order = orderResult.rows[0];
+
+  // Update order status to in_transit
+  const updatedOrder = await query(
+    `UPDATE orders SET status = 'in_transit', updated_at = CURRENT_TIMESTAMP WHERE id = $1 RETURNING *`,
+    [orderId]
+  );
+
+  // Free the dropoff compartment in locker
+  await markCompartmentAvailable(order.station_id, order.dropoff_box_number);
+
+  return updatedOrder.rows[0];
+}
+
+// Facility updates laundry weight & price, marks in_wash
+export async function updateOrderIntake(orderId, weightKg, amount) {
+  const updated = await query(
+    `UPDATE orders 
+     SET status = 'in_wash', 
+         weight_kg = $1, 
+         amount = $2, 
+         updated_at = CURRENT_TIMESTAMP 
+     WHERE id = $3 
+     RETURNING *`,
+    [weightKg, amount, orderId]
+  );
+  return updated.rows[0];
+}
+
+// Driver delivers clean laundry back to a locker compartment
+export async function deliverCleanOrder(orderId, stationId, boxNumber) {
+  // Generate 6-digit claim PIN
+  const claimPin = Math.floor(100000 + Math.random() * 900000).toString();
+
+  // Mark order ready_for_pickup
+  const updatedOrder = await query(
+    `UPDATE orders 
+     SET status = 'ready_for_pickup', 
+         pickup_box_number = $1, 
+         compartment_number = $1,
+         claim_pin = $2, 
+         updated_at = CURRENT_TIMESTAMP 
+     WHERE id = $3 
+     RETURNING *`,
+    [boxNumber, claimPin, orderId]
+  );
+
+  // Mark compartment occupied
+  await markCompartmentOccupied(stationId, boxNumber, orderId);
+
+  return updatedOrder.rows[0];
+}

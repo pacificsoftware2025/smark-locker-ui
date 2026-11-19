@@ -42,9 +42,15 @@ CREATE TABLE IF NOT EXISTS orders (
   special_instructions TEXT,
   status VARCHAR(30) DEFAULT 'dropped_off',     -- 'dropped_off', 'in_transit', 'in_wash', 'ready_for_pickup', 'completed', 'cancelled'
   claim_pin VARCHAR(10),                        -- 6-digit PIN generated when placed in pickup locker
+  weight_kg NUMERIC(5,2),                       -- Measured weight at laundry facility
+  amount NUMERIC(10,2),                         -- Billed price in PHP
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Migration helpers for existing tables
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS weight_kg NUMERIC(5,2);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount NUMERIC(10,2);
 
 -- Indexes for lightning-fast queries
 CREATE INDEX IF NOT EXISTS idx_compartments_station_status ON locker_compartments(station_id, status);

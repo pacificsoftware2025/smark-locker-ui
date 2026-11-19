@@ -75,3 +75,74 @@ export async function handleGetOrder(req, res, next) {
     next(err);
   }
 }
+
+// GET /api/orders
+export async function handleListOrders(req, res, next) {
+  try {
+    const { status } = req.query;
+    const orders = await orderService.listOrders(status);
+
+    return res.status(200).json({
+      success: true,
+      count: orders.length,
+      data: orders,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/orders/:id/collect (Rider collects dirty laundry from locker)
+export async function handleDriverCollect(req, res, next) {
+  try {
+    const { id } = req.params;
+    const order = await orderService.collectOrderByDriver(id);
+
+    return res.status(200).json({
+      success: true,
+      message: `Order ${id} collected by driver. Compartment is now available.`,
+      data: order,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/orders/:id/intake (Facility operator updates weight & price)
+export async function handleOrderIntake(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { weightKg, amount } = req.body;
+    const order = await orderService.updateOrderIntake(id, weightKg, amount);
+
+    return res.status(200).json({
+      success: true,
+      message: `Order ${id} intake completed. Moved to In Wash.`,
+      data: order,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/orders/:id/deliver (Driver delivers clean laundry back to locker)
+export async function handleDriverDeliver(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { stationId, boxNumber } = req.body;
+    const order = await orderService.deliverCleanOrder(id, stationId || 'CMH-01', boxNumber);
+
+    return res.status(200).json({
+      success: true,
+      message: `Order ${id} placed in Box ${boxNumber}. Ready for customer pickup.`,
+      data: {
+        orderId: order.id,
+        pickupBoxNumber: order.pickup_box_number,
+        claimPin: order.claim_pin,
+        status: order.status,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
