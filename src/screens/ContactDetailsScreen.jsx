@@ -108,7 +108,7 @@ export function ContactDetailsScreen(props) {
         {/* Validation Error Alert */}
         {errorMessage !== '' && (
           <View style={styles.alertBox}>
-            <Text style={styles.alertIcon}>⚠️</Text>
+            <View style={styles.alertDot} />
             <Text style={styles.alertText}>{errorMessage}</Text>
           </View>
         )}
@@ -117,7 +117,6 @@ export function ContactDetailsScreen(props) {
         <View style={styles.inputGroup}>
           <Text style={styles.fieldLabel}>FULL NAME</Text>
           <View style={styles.fieldBox}>
-            <Text style={styles.fieldIcon}>👤</Text>
             <TextInput
               value={name}
               onChangeText={handleNameChange}
@@ -134,8 +133,7 @@ export function ContactDetailsScreen(props) {
           <Text style={styles.fieldLabel}>MOBILE NUMBER (SMS NOTIFICATIONS)</Text>
           <View style={styles.fieldBox}>
             <View style={styles.countryCodeBadge}>
-              <Text style={styles.countryFlag}>🇵🇭</Text>
-              <Text style={styles.countryPrefix}>+63</Text>
+              <Text style={styles.countryPrefix}>PH +63</Text>
             </View>
             <TextInput
               value={phone}
@@ -263,8 +261,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
   },
-  alertIcon: {
-    fontSize: 16,
+  alertDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.orange,
   },
   alertText: {
     fontFamily: FONTS.family,
@@ -293,10 +294,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 14,
   },
-  fieldIcon: {
-    fontSize: 16,
-    marginRight: 10,
-  },
   countryCodeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -304,10 +301,6 @@ const styles = StyleSheet.create({
     marginRight: 12,
     borderRightWidth: 1.5,
     borderRightColor: COLORS.slate200,
-    gap: 6,
-  },
-  countryFlag: {
-    fontSize: 16,
   },
   countryPrefix: {
     fontFamily: FONTS.family,

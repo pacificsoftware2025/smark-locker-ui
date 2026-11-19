@@ -6,6 +6,7 @@ import { ServicePreferenceModal } from './ServicePreferenceModal';
 import { DoorOpenScreen } from './DoorOpenScreen';
 import { PickupScreen } from './PickupScreen';
 import { openLockerDoor } from '../native/LockerBridge';
+import { submitDropoffOrder } from '../services/api';
 import { COLORS } from '../theme/colors';
 import { ENV } from '../config/env';
 
@@ -28,6 +29,7 @@ export function KioskView() {
     customerName: '',
     contactNumber: '',
     assignedBox: '03',
+    compartmentNumber: '03',
   });
 
   // Global 60-second inactivity timer reference
@@ -67,6 +69,7 @@ export function KioskView() {
       customerName: '',
       contactNumber: '',
       assignedBox: '03',
+      compartmentNumber: '03',
     });
   }
 
@@ -89,7 +92,29 @@ export function KioskView() {
 
   // 3. Customer taps "Save Preference & Unlock Locker"
   async function handlePreferenceComplete(orderData) {
-    const boxNumber = parseInt(orderData.assignedBox || '3', 10);
+    const requestedBox = orderData.compartmentNumber || orderData.assignedBox || '03';
+
+    // Full customer order payload sent to database
+    const customerOrderPayload = {
+      customerName: sessionOrder.customerName,
+      contactNumber: sessionOrder.contactNumber,
+      stationId: stationId,
+      compartmentNumber: requestedBox,
+      dropoffBoxNumber: requestedBox,
+      serviceTier: orderData.serviceTier,
+      serviceSize: orderData.serviceSize,
+      temperature: orderData.temperature,
+      fabricSoftener: orderData.fabricSoftener,
+      specialInstructions: orderData.specialInstructions,
+      createdAt: new Date().toISOString(),
+    };
+
+    console.log('[KioskView] Submitting Drop-off Order to API:', customerOrderPayload);
+
+    // Call Backend API with automatic offline resilience
+    const apiResponse = await submitDropoffOrder(customerOrderPayload);
+    const assignedCompartment = apiResponse.compartmentNumber || requestedBox;
+    const boxNumber = parseInt(assignedCompartment, 10);
     const boardId = 1;
 
     try {
@@ -102,7 +127,8 @@ export function KioskView() {
     setSessionOrder(function (prev) {
       return {
         ...prev,
-        assignedBox: orderData.assignedBox || '03',
+        assignedBox: assignedCompartment,
+        compartmentNumber: assignedCompartment,
       };
     });
 

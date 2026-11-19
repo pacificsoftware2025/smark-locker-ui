@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { COLORS, FONTS } from '../theme';
+import { verifyPickupPin } from '../services/api';
 
 // ==============================================================================
 // REACT NATIVE COMPONENT: PickupScreen
@@ -44,25 +45,33 @@ export function PickupScreen(props) {
     }
   }
 
-  // Verifies the entered PIN
-  function handleVerifyAndUnlock() {
+  // Verifies the entered PIN with the backend API
+  async function handleVerifyAndUnlock() {
     if (pin.length < 4) {
       setErrorMessage('Please enter your complete claim PIN code.');
       return;
     }
 
     setIsVerifying(true);
+    setErrorMessage('');
 
-    // Simulates backend verification (e.g. POST /api/pickup/verify)
-    setTimeout(function () {
+    try {
+      const response = await verifyPickupPin(pin);
       setIsVerifying(false);
 
-      // Successfully verified -> opens pickup box
-      onUnlockSuccess({
-        assignedBox: '05',
-        customerName: 'Customer',
-      });
-    }, 1000);
+      if (response.success) {
+        // Successfully verified -> opens pickup box
+        onUnlockSuccess({
+          assignedBox: response.assignedBox || '05',
+          customerName: response.customerName || 'Customer',
+        });
+      } else {
+        setErrorMessage(response.message || 'Invalid claim PIN. Please verify and try again.');
+      }
+    } catch (err) {
+      setIsVerifying(false);
+      setErrorMessage('Communication error. Please try again.');
+    }
   }
 
   return (
@@ -102,7 +111,7 @@ export function PickupScreen(props) {
         {/* Validation Error Banner */}
         {errorMessage !== '' && (
           <View style={styles.alertBox}>
-            <Text style={styles.alertIcon}>⚠️</Text>
+            <View style={styles.alertDot} />
             <Text style={styles.alertText}>{errorMessage}</Text>
           </View>
         )}
@@ -189,8 +198,8 @@ export function PickupScreen(props) {
             </View>
           ) : (
             <View style={styles.verifyingRow}>
-              <Text style={styles.lockEmoji}>🔓</Text>
               <Text style={styles.claimBtnText}>Unlock Locker Box</Text>
+              <Text style={styles.claimBtnArrow}>→</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -291,8 +300,11 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 320,
   },
-  alertIcon: {
-    fontSize: 16,
+  alertDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.orange,
   },
   alertText: {
     fontFamily: FONTS.family,
@@ -393,8 +405,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  lockEmoji: {
+  claimBtnArrow: {
+    fontFamily: FONTS.family,
     fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.white,
   },
   claimBtnText: {
     fontFamily: FONTS.family,

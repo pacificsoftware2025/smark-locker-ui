@@ -61,12 +61,13 @@ export function DoorOpenScreen(props) {
       {/* ------------------------------------------------------------- */}
       <View style={styles.content}>
         
-        {/* Unlocked Icon Box */}
-        <View style={styles.unlockedIconCircle}>
-          <Text style={styles.unlockedEmoji}>🔓</Text>
+        {/* Compartment Number Indicator */}
+        <View style={styles.boxNumberCircle}>
+          <Text style={styles.boxNumberLarge}>{assignedBox}</Text>
+          <Text style={styles.boxNumberSub}>OPEN</Text>
         </View>
 
-        <Text style={styles.headline}>Box #{assignedBox} Is Open!</Text>
+        <Text style={styles.headline}>Compartment #{assignedBox} Is Open</Text>
 
         <View style={styles.statusPill}>
           <Text style={styles.statusPillIcon}>✓</Text>
@@ -181,9 +182,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
   },
-  unlockedIconCircle: {
-    width: 80,
-    height: 80,
+  boxNumberCircle: {
+    width: 90,
+    height: 90,
     borderRadius: 24,
     backgroundColor: COLORS.emeraldSubtle,
     borderWidth: 2,
@@ -192,8 +193,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
   },
-  unlockedEmoji: {
-    fontSize: 36,
+  boxNumberLarge: {
+    fontFamily: FONTS.family,
+    fontSize: 34,
+    fontWeight: '900',
+    color: COLORS.emeraldDark,
+    letterSpacing: -1,
+    lineHeight: 38,
+  },
+  boxNumberSub: {
+    fontFamily: FONTS.family,
+    fontSize: 10,
+    fontWeight: '900',
+    color: COLORS.emerald,
+    letterSpacing: 1,
   },
   headline: {
     fontFamily: FONTS.family,

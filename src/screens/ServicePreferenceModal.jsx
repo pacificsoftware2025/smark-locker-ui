@@ -51,6 +51,8 @@ export function ServicePreferenceModal(props) {
       temperature: temperature,
       fabricSoftener: fabricSoftener,
       specialInstructions: specialInstructions.trim() || 'Standard care',
+      compartmentNumber: assignedBox, // Explicit locker compartment number
+      boxNumber: assignedBox,
       assignedBox: assignedBox,
       stationId: stationId,
     };
@@ -84,7 +86,7 @@ export function ServicePreferenceModal(props) {
                 </View>
                 
                 <View style={styles.boxBadge}>
-                  <Text style={styles.boxText}>📦 Box #{assignedBox} (Medium)</Text>
+                  <Text style={styles.boxText}>Compartment #{assignedBox}</Text>
                 </View>
               </View>
 
@@ -279,7 +281,7 @@ export function ServicePreferenceModal(props) {
 
             {/* 5. PRICING NOTICE BANNER */}
             <View style={styles.noticeCard}>
-              <Text style={styles.noticeIcon}>⚖️</Text>
+              <View style={styles.noticeDot} />
               <View style={styles.noticeTextCol}>
                 <Text style={styles.noticeTitle}>No payment due right now</Text>
                 <Text style={styles.noticeSub}>
@@ -307,8 +309,8 @@ export function ServicePreferenceModal(props) {
                 </View>
               ) : (
                 <View style={styles.unlockingRow}>
-                  <Text style={styles.lockIconEmoji}>🔒</Text>
                   <Text style={styles.unlockBtnText}>Save Preference & Unlock Locker</Text>
+                  <Text style={styles.unlockBtnArrow}>→</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -635,9 +637,12 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 10,
   },
-  noticeIcon: {
-    fontSize: 18,
-    marginTop: 1,
+  noticeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.slate400,
+    marginTop: 5,
   },
   noticeTextCol: {
     flex: 1,
@@ -682,8 +687,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  lockIconEmoji: {
+  unlockBtnArrow: {
+    fontFamily: FONTS.family,
     fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.white,
   },
   unlockBtnText: {
     fontFamily: FONTS.family,
