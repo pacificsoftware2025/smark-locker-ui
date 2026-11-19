@@ -5,19 +5,16 @@ import { ENV } from '../config/env';
 
 // ==============================================================================
 // REACT NATIVE COMPONENT: HomeScreen
-// Premium, ultra-clean Kiosk Welcome Screen directly matching Image 1 aesthetic.
-// Features:
-//   1. Lush Safety Orange Curved Hero Header with Status Badges & Welcome Text
-//   2. Floating Pure White Curved Card Container
-//   3. High-Contrast Primary CTA (Drop Off) + Outlined Card CTA (Pickup)
-//   4. Clean Minimal Footer
+// Pure Minimalist Kiosk Screen:
+//   - Generous breathing space & high typography contrast
+//   - Zero emojis, zero feature clutter, zero walls of text
+//   - 2 large, confident, distraction-free touch actions: Drop Off & Pick Up
 // ==============================================================================
 export function HomeScreen(props) {
   const onStartDropoff = props.onStartDropoff;
   const onStartPickup = props.onStartPickup;
   const stationId = props.stationId || ENV.stationId;
 
-  // Live digital clock (synced every second)
   const [currentTime, setCurrentTime] = useState('');
 
   useEffect(function () {
@@ -38,120 +35,76 @@ export function HomeScreen(props) {
     <View style={styles.container}>
       
       {/* ------------------------------------------------------------- */}
-      {/* 1. TOP CURVED HERO HEADER (Image 1 Style - Safety Orange)     */}
+      {/* 1. QUIET MINIMAL TOP BAR                                      */}
       {/* ------------------------------------------------------------- */}
-      <View style={styles.heroSection}>
-        
-        {/* Top Status Bar: Clock + Live Hardware Status Pills */}
-        <View style={styles.statusBarRow}>
-          <Text style={styles.clockText}>{currentTime || '9:41'}</Text>
-          
-          <View style={styles.statusPillsWrapper}>
-            <View style={styles.onlinePill}>
-              <View style={styles.livePulseDot} />
-              <Text style={styles.onlinePillText}>ONLINE</Text>
-            </View>
-            <View style={styles.stationPill}>
-              <Text style={styles.stationPillText}>{stationId}</Text>
-            </View>
-          </View>
+      <View style={styles.topBar}>
+        <View style={styles.stationGroup}>
+          <Text style={styles.brandName}>Smart Locker</Text>
+          <Text style={styles.stationDivider}>/</Text>
+          <Text style={styles.stationCode}>{stationId}</Text>
         </View>
 
-        {/* Hero Welcome Typography */}
-        <View style={styles.heroTextWrapper}>
-          <Text style={styles.heroHeading}>Welcome Back</Text>
-          <Text style={styles.heroSubheading}>
-            Automated drop-off, real-time laundry tracking, & secure contact-free lockers.
+        <View style={styles.statusGroup}>
+          <View style={styles.liveDot} />
+          <Text style={styles.clockText}>{currentTime || '09:41'}</Text>
+        </View>
+      </View>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 2. CENTER CONTENT: MINIMALIST DISPLAY & 2 TOUCH ACTIONS       */}
+      {/* ------------------------------------------------------------- */}
+      <View style={styles.centerContent}>
+        
+        {/* Clean Headline */}
+        <View style={styles.headingBlock}>
+          <Text style={styles.headline}>
+            Clean laundry,{'\n'}made simple.
           </Text>
+          <Text style={styles.subline}>
+            Tap an option below to begin.
+          </Text>
+        </View>
+
+        {/* 2 Focused Minimalist Buttons */}
+        <View style={styles.actionsContainer}>
+          
+          {/* Button 1: Drop Off (Safety Orange #ea580c) */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={onStartDropoff}
+            style={styles.dropoffBtn}
+          >
+            <View style={styles.btnTextCol}>
+              <Text style={styles.dropoffTitle}>Drop Off</Text>
+              <Text style={styles.dropoffSubtitle}>Leave clothes for wash & fold</Text>
+            </View>
+            <Text style={styles.arrowWhite}>→</Text>
+          </TouchableOpacity>
+
+          {/* Button 2: Pick Up (Crisp Slate Border) */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={onStartPickup}
+            style={styles.pickupBtn}
+          >
+            <View style={styles.btnTextCol}>
+              <Text style={styles.pickupTitle}>Pick Up</Text>
+              <Text style={styles.pickupSubtitle}>Claim clean laundry with PIN</Text>
+            </View>
+            <Text style={styles.arrowSlate}>→</Text>
+          </TouchableOpacity>
+
         </View>
 
       </View>
 
       {/* ------------------------------------------------------------- */}
-      {/* 2. FLOATING CURVED WHITE CARD CONTAINER                       */}
+      {/* 3. QUIET MINIMAL FOOTER                                       */}
       {/* ------------------------------------------------------------- */}
-      <View style={styles.sheetCard}>
-        
-        {/* Pill Badge */}
-        <View style={styles.badgeRow}>
-          <View style={styles.kioskPillBadge}>
-            <Text style={styles.kioskPillText}>🔒 CONTACTLESS SELF-SERVICE</Text>
-          </View>
-        </View>
-
-        {/* Section Heading */}
-        <View style={styles.actionsIntro}>
-          <Text style={styles.sectionLabel}>HOW CAN WE HELP YOU TODAY?</Text>
-        </View>
-
-        {/* ----------------------------------------------------------- */}
-        {/* BUTTON 1: DROP OFF LAUNDRY (Primary Safety Orange CTA)      */}
-        {/* ----------------------------------------------------------- */}
-        <TouchableOpacity
-          activeOpacity={0.88}
-          onPress={onStartDropoff}
-          style={styles.primaryDropoffCard}
-        >
-          <View style={styles.cardLeft}>
-            <View style={styles.dropoffIconCircle}>
-              <Text style={styles.iconEmoji}>📦</Text>
-            </View>
-            <View style={styles.cardTextCol}>
-              <Text style={styles.dropoffTitle}>Drop Off Laundry</Text>
-              <Text style={styles.dropoffSubtitle}>Deposit clothes for wash, dry & fold</Text>
-            </View>
-          </View>
-          <View style={styles.arrowCircleWhite}>
-            <Text style={styles.arrowTextOrange}>→</Text>
-          </View>
-        </TouchableOpacity>
-
-        {/* ----------------------------------------------------------- */}
-        {/* SUBTLE DIVIDER (Image 1 "─── OR ───")                       */}
-        {/* ----------------------------------------------------------- */}
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerHairline} />
-          <Text style={styles.dividerLabel}>OR</Text>
-          <View style={styles.dividerHairline} />
-        </View>
-
-        {/* ----------------------------------------------------------- */}
-        {/* BUTTON 2: PICK UP LAUNDRY (Clean Outlined Card from Image 1)*/}
-        {/* ----------------------------------------------------------- */}
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={onStartPickup}
-          style={styles.secondaryPickupCard}
-        >
-          <View style={styles.cardLeft}>
-            <View style={styles.pickupIconBox}>
-              <Text style={styles.iconEmoji}>🔑</Text>
-            </View>
-            <View style={styles.cardTextCol}>
-              <Text style={styles.pickupTitle}>Pick Up Clean Laundry</Text>
-              <Text style={styles.pickupSubtitle}>Claim clean items using your 6-digit PIN</Text>
-            </View>
-          </View>
-          <Text style={styles.chevronGray}>→</Text>
-        </TouchableOpacity>
-
-        {/* Station Live Diagnostics Pill */}
-        <View style={styles.stationHealthCard}>
-          <View style={styles.healthDot} />
-          <Text style={styles.healthText}>
-            Locker Station Ready &bull; Touch any button to begin
-          </Text>
-        </View>
-
-        {/* ----------------------------------------------------------- */}
-        {/* 3. MINIMAL CLEAN FOOTER                                      */}
-        {/* ----------------------------------------------------------- */}
-        <View style={styles.footerSection}>
-          <Text style={styles.footerBrand}>
-            &copy; 2026 Smart Locker Depot &bull; Operational 24/7
-          </Text>
-        </View>
-
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>
+          Contactless 24/7 &bull; {stationId}
+        </Text>
       </View>
 
     </View>
@@ -161,320 +114,175 @@ export function HomeScreen(props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.orange, // Deep Safety Orange #ea580c
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 28,
+    paddingVertical: 24,
+    justifyContent: 'space-between',
   },
 
   // -------------------------------------------------------------
-  // HERO BANNER SECTION (Image 1 Style)
+  // TOP BAR
   // -------------------------------------------------------------
-  heroSection: {
-    backgroundColor: COLORS.orange,
-    paddingTop: 22,
-    paddingHorizontal: 24,
-    paddingBottom: 32,
-    gap: 18,
-  },
-  statusBarRow: {
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  clockText: {
-    fontFamily: FONTS.family,
-    fontSize: 16,
-    fontWeight: '800',
-    color: COLORS.white,
-    letterSpacing: -0.3,
-  },
-  statusPillsWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  onlinePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 9999,
-    gap: 6,
-  },
-  livePulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#86efac', // Soft Emerald
-  },
-  onlinePillText: {
-    fontFamily: FONTS.family,
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.white,
-    letterSpacing: 0.6,
-  },
-  stationPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 9999,
-  },
-  stationPillText: {
-    fontFamily: FONTS.family,
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.white,
-    letterSpacing: 0.6,
-  },
-  heroTextWrapper: {
-    gap: 8,
     paddingTop: 8,
   },
-  heroHeading: {
-    fontFamily: FONTS.family,
-    fontSize: 34,
-    fontWeight: '900',
-    color: COLORS.white,
-    letterSpacing: -1,
+  stationGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
-  heroSubheading: {
+  brandName: {
+    fontFamily: FONTS.family,
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.slate900,
+    letterSpacing: -0.2,
+  },
+  stationDivider: {
     fontFamily: FONTS.family,
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.94)',
-    lineHeight: 20,
-    maxWidth: 340,
+    color: COLORS.slate300,
   },
-
-  // -------------------------------------------------------------
-  // FLOATING CURVED WHITE SHEET
-  // -------------------------------------------------------------
-  sheetCard: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
-    paddingHorizontal: 22,
-    paddingTop: 28,
-    paddingBottom: 24,
-    justifyContent: 'space-between',
-    shadowColor: COLORS.slate900,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  badgeRow: {
-    alignItems: 'flex-start',
-  },
-  kioskPillBadge: {
-    backgroundColor: COLORS.slate100,
-    borderWidth: 1,
-    borderColor: COLORS.slate200,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  kioskPillText: {
+  stationCode: {
     fontFamily: FONTS.family,
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.slate600,
-    letterSpacing: 0.6,
-  },
-  actionsIntro: {
-    paddingTop: 4,
-  },
-  sectionLabel: {
-    fontFamily: FONTS.family,
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.slate400,
-    letterSpacing: 1,
-  },
-
-  // -------------------------------------------------------------
-  // BUTTON 1: DROP OFF LAUNDRY (Primary Safety Orange)
-  // -------------------------------------------------------------
-  primaryDropoffCard: {
-    minHeight: 82, // Ergonomic touch target >= 44px
-    backgroundColor: COLORS.orange,
-    borderWidth: 1,
-    borderColor: COLORS.orangeHover,
-    borderRadius: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    shadowColor: COLORS.orange,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.32,
-    shadowRadius: 14,
-    elevation: 5,
-  },
-  cardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    flex: 1,
-  },
-  dropoffIconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconEmoji: {
-    fontSize: 24,
-  },
-  cardTextCol: {
-    flex: 1,
-    gap: 3,
-  },
-  dropoffTitle: {
-    fontFamily: FONTS.family,
-    fontSize: 18,
-    fontWeight: '900',
-    color: COLORS.white,
-    letterSpacing: 0.2,
-  },
-  dropoffSubtitle: {
-    fontFamily: FONTS.family,
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.9)',
-    lineHeight: 16,
-  },
-  arrowCircleWhite: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: COLORS.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: COLORS.slate900,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
-  },
-  arrowTextOrange: {
-    fontFamily: FONTS.family,
-    fontSize: 18,
-    fontWeight: '900',
-    color: COLORS.orange,
-  },
-
-  // -------------------------------------------------------------
-  // DIVIDER (OR)
-  // -------------------------------------------------------------
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: 4,
-  },
-  dividerHairline: {
-    flex: 1,
-    height: 1,
-    backgroundColor: COLORS.slate200,
-  },
-  dividerLabel: {
-    fontFamily: FONTS.family,
-    fontSize: 11,
-    fontWeight: '800',
-    color: COLORS.slate400,
-    letterSpacing: 1.2,
-  },
-
-  // -------------------------------------------------------------
-  // BUTTON 2: PICK UP LAUNDRY (Clean Outlined Card from Image 1)
-  // -------------------------------------------------------------
-  secondaryPickupCard: {
-    minHeight: 82, // Ergonomic touch target >= 44px
-    backgroundColor: COLORS.white,
-    borderWidth: 2,
-    borderColor: COLORS.slate200,
-    borderRadius: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    shadowColor: COLORS.slate900,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  pickupIconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    backgroundColor: COLORS.slate100,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pickupTitle: {
-    fontFamily: FONTS.family,
-    fontSize: 17,
-    fontWeight: '900',
-    color: COLORS.slate900,
-    letterSpacing: 0.2,
-  },
-  pickupSubtitle: {
-    fontFamily: FONTS.family,
-    fontSize: 12,
-    color: COLORS.slate500,
-    lineHeight: 16,
-  },
-  chevronGray: {
-    fontFamily: FONTS.family,
-    fontSize: 22,
+    fontSize: 13,
     fontWeight: '700',
-    color: COLORS.slate400,
-    paddingRight: 6,
+    color: COLORS.slate500,
   },
-
-  // -------------------------------------------------------------
-  // STATION HEALTH INDICATOR
-  // -------------------------------------------------------------
-  stationHealthCard: {
+  statusGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.slate50,
-    borderWidth: 1,
-    borderColor: COLORS.slate200,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
     gap: 8,
-    alignSelf: 'center',
   },
-  healthDot: {
+  liveDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: COLORS.emerald,
   },
-  healthText: {
+  clockText: {
     fontFamily: FONTS.family,
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: '700',
-    color: COLORS.slate600,
+    color: COLORS.slate700,
+  },
+
+  // -------------------------------------------------------------
+  // CENTER CONTENT
+  // -------------------------------------------------------------
+  centerContent: {
+    gap: 36,
+    paddingVertical: 12,
+  },
+  headingBlock: {
+    gap: 10,
+  },
+  headline: {
+    fontFamily: FONTS.family,
+    fontSize: 38,
+    fontWeight: '900',
+    color: COLORS.slate900,
+    letterSpacing: -1.2,
+    lineHeight: 44,
+  },
+  subline: {
+    fontFamily: FONTS.family,
+    fontSize: 16,
+    color: COLORS.slate500,
+  },
+
+  // -------------------------------------------------------------
+  // ACTIONS CONTAINER (2 Minimalist Buttons)
+  // -------------------------------------------------------------
+  actionsContainer: {
+    gap: 16,
+  },
+  dropoffBtn: {
+    minHeight: 90,
+    backgroundColor: COLORS.orange,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+    shadowColor: COLORS.orange,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  pickupBtn: {
+    minHeight: 90,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: COLORS.slate200,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+    shadowColor: COLORS.slate900,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  btnTextCol: {
+    gap: 4,
+  },
+  dropoffTitle: {
+    fontFamily: FONTS.family,
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: -0.4,
+  },
+  dropoffSubtitle: {
+    fontFamily: FONTS.family,
+    fontSize: 13,
+    color: 'rgba(255, 255, 255, 0.88)',
+  },
+  pickupTitle: {
+    fontFamily: FONTS.family,
+    fontSize: 22,
+    fontWeight: '900',
+    color: COLORS.slate900,
+    letterSpacing: -0.4,
+  },
+  pickupSubtitle: {
+    fontFamily: FONTS.family,
+    fontSize: 13,
+    color: COLORS.slate500,
+  },
+  arrowWhite: {
+    fontFamily: FONTS.family,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  arrowSlate: {
+    fontFamily: FONTS.family,
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.slate400,
   },
 
   // -------------------------------------------------------------
   // FOOTER
   // -------------------------------------------------------------
-  footerSection: {
+  footer: {
     alignItems: 'center',
-    paddingTop: 6,
+    paddingBottom: 4,
   },
-  footerBrand: {
+  footerText: {
     fontFamily: FONTS.family,
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.slate400,
-    letterSpacing: 0.2,
+    letterSpacing: 0.5,
   },
 });
