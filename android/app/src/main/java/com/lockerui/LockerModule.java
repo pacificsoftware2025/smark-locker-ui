@@ -1,5 +1,6 @@
 package com.lockerui;
 
+import java.io.File;
 import android.util.Log;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
@@ -37,14 +38,27 @@ public class LockerModule extends ReactContextBaseJavaModule {
      */
     private synchronized void ensureInitialized() {
         if (!isInitialized) {
-            try {
-                Log.d(TAG, "Initializing SerialServer on " + serialPort + " with type ATAT...");
-                SerialServer.getInstance().Init(serialPort, boardType);
-                SerialServer.getInstance().open();
-                isInitialized = true;
-                Log.d(TAG, "SerialServer initialized successfully.");
-            } catch (Throwable e) {
-                Log.w(TAG, "Hardware SerialPort unavailable (running in simulation/emulator mode): " + e.getMessage());
+            // Auto-detect candidate ports based on Aituo hardware models (MT uses ttyS3, LK uses ttyS2)
+            String[] candidatePorts = new String[] { serialPort, "/dev/ttyS3", "/dev/ttyS2", "/dev/ttyS1", "/dev/ttyS4", "/dev/ttyS0", "/dev/ttyUSB0" };
+            for (String port : candidatePorts) {
+                File file = new File(port);
+                if (file.exists()) {
+                    try {
+                        Log.d(TAG, "Trying SerialServer on " + port + " with type ATAT...");
+                        SerialServer.getInstance().Init(port, boardType);
+                        SerialServer.getInstance().open();
+                        serialPort = port;
+                        isInitialized = true;
+                        Log.d(TAG, "SerialServer initialized successfully on " + port);
+                        break;
+                    } catch (Throwable e) {
+                        Log.w(TAG, "Hardware attempt on " + port + " failed: " + e.getMessage());
+                    }
+                }
+            }
+
+            if (!isInitialized) {
+                Log.w(TAG, "No active physical RS485 port found (running in simulation/emulator mode).");
             }
         }
     }

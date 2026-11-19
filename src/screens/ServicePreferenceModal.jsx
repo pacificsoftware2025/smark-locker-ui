@@ -327,8 +327,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.72)',
     justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   modalCard: {
+    width: '100%',
+    maxWidth: 500,
     backgroundColor: COLORS.white,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -336,6 +339,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 28,
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',

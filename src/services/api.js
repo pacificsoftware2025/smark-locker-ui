@@ -17,7 +17,7 @@ export async function submitDropoffOrder(payload) {
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout to allow Render free tier spin-up
 
     const response = await fetch(url, {
       method: 'POST',
@@ -65,7 +65,7 @@ export async function verifyPickupPin(pin) {
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout to allow Render free tier spin-up
 
     const response = await fetch(url, {
       method: 'POST',
