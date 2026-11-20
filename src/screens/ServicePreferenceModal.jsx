@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -7,7 +7,8 @@ import {
   Modal, 
   ScrollView, 
   StyleSheet,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { COLORS, FONTS } from '../theme';
 import { LAUNDRY_SERVICES, LOAD_SIZES } from '../constants/laundry';
@@ -29,10 +30,22 @@ export function ServicePreferenceModal(props) {
   const onSaveAndUnlock = props.onSaveAndUnlock;
   const stationId = props.stationId || 'CMH-01';
   const assignedBox = props.assignedBox || '03';
+  const sizeAvailability = props.sizeAvailability || { small: 4, medium: 8, large: 4 };
+
+  // Helper to verify if compartments exist for a size
+  function isSizeAvailable(sizeName) {
+    const key = (sizeName || '').toLowerCase();
+    return (sizeAvailability[key] ?? 1) > 0;
+  }
 
   // Selected Service Options States
   const [selectedService, setSelectedService] = useState('Wash, Dry & Fold');
-  const [selectedSize, setSelectedSize] = useState('Medium');
+  const [selectedSize, setSelectedSize] = useState(function () {
+    if (isSizeAvailable('Medium')) return 'Medium';
+    if (isSizeAvailable('Small')) return 'Small';
+    if (isSizeAvailable('Large')) return 'Large';
+    return 'Medium';
+  });
   const [temperature, setTemperature] = useState('Cold'); // 'Cold' | 'Warm'
   const [fabricSoftener, setFabricSoftener] = useState(true); // true = Yes, false = No
   const [specialInstructions, setSpecialInstructions] = useState('');
@@ -40,8 +53,29 @@ export function ServicePreferenceModal(props) {
   // Solenoid door actuation spinner state
   const [isUnlocking, setIsUnlocking] = useState(false);
 
+  // Auto-switch to an available size if the currently selected size becomes full
+  useEffect(function () {
+    if (!isSizeAvailable(selectedSize)) {
+      const firstAvailable = LOAD_SIZES.find(function (s) {
+        return isSizeAvailable(s.label);
+      });
+      if (firstAvailable) {
+        setSelectedSize(firstAvailable.label);
+      }
+    }
+  }, [sizeAvailability]);
+
   // Triggered when user taps "Save Preference & Unlock Locker"
   function handleUnlockPress() {
+    if (!isSizeAvailable(selectedSize)) {
+      Alert.alert(
+        'Compartment Size Full',
+        `All ${selectedSize} locker compartments are currently occupied. Please choose another size.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     setIsUnlocking(true);
 
     // Prepare complete order payload
@@ -162,21 +196,49 @@ export function ServicePreferenceModal(props) {
               <View style={styles.sizeGrid}>
                 {LOAD_SIZES.map(function (size) {
                   const isSizeActive = selectedSize === size.label;
+                  const available = isSizeAvailable(size.label);
+
                   return (
                     <TouchableOpacity
                       key={size.id}
-                      activeOpacity={0.8}
-                      onPress={function () { setSelectedSize(size.label); }}
+                      activeOpacity={available ? 0.8 : 1}
+                      onPress={function () {
+                        if (!available) {
+                          Alert.alert(
+                            'Size Occupied',
+                            `All ${size.label} locker compartments are currently occupied. Please choose another available size.`,
+                            [{ text: 'OK' }]
+                          );
+                          return;
+                        }
+                        setSelectedSize(size.label);
+                      }}
                       style={[
                         styles.sizeBtn,
                         isSizeActive && styles.sizeBtnActive,
+                        !available && styles.sizeBtnDisabled,
                       ]}
                     >
-                      <Text style={[styles.sizeLabel, isSizeActive && styles.sizeLabelActive]}>
-                        {size.label}
-                      </Text>
-                      <Text style={[styles.sizeKg, isSizeActive && styles.sizeKgActive]}>
-                        {size.maxKg}
+                      <View style={styles.sizeTitleRow}>
+                        <Text style={[
+                          styles.sizeLabel, 
+                          isSizeActive && styles.sizeLabelActive,
+                          !available && styles.sizeLabelDisabled
+                        ]}>
+                          {size.label}
+                        </Text>
+                        {!available && (
+                          <View style={styles.sizeFullBadge}>
+                            <Text style={styles.sizeFullBadgeText}>FULL</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[
+                        styles.sizeKg, 
+                        isSizeActive && styles.sizeKgActive,
+                        !available && styles.sizeKgDisabled
+                      ]}>
+                        {!available ? '0 Available' : size.maxKg}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -556,6 +618,35 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.orangeSubtle,
     borderColor: COLORS.orange,
     borderWidth: 2,
+  },
+  sizeBtnDisabled: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#cbd5e1',
+    opacity: 0.55,
+  },
+  sizeTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  sizeFullBadge: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  sizeFullBadgeText: {
+    fontFamily: FONTS.family,
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: 0.5,
+  },
+  sizeLabelDisabled: {
+    color: '#94a3b8',
+  },
+  sizeKgDisabled: {
+    color: '#94a3b8',
   },
   sizeLabel: {
     fontFamily: FONTS.family,

@@ -27,12 +27,12 @@ export async function getStationAvailability(stationId) {
   return result.rows;
 }
 
-// Finds and reserves the first available compartment matching the requested size
+// Finds and reserves the first available compartment matching the exact requested size
 export async function allocateCompartment(stationId, loadSize) {
   const targetSize = mapSizeCategory(loadSize);
 
-  // 1. Try to find an available box of the exact requested size
-  let sql = `
+  // Find an available box of the exact requested size
+  const sql = `
     SELECT box_number, size 
     FROM locker_compartments
     WHERE station_id = $1 AND size = $2 AND status = 'available'
@@ -40,23 +40,10 @@ export async function allocateCompartment(stationId, loadSize) {
     LIMIT 1
     FOR UPDATE SKIP LOCKED;
   `;
-  let result = await query(sql, [stationId, targetSize]);
-
-  // 2. Fallback: if exact size full and customer asked for small/medium, try larger
-  if (result.rows.length === 0 && targetSize !== 'large') {
-    sql = `
-      SELECT box_number, size 
-      FROM locker_compartments
-      WHERE station_id = $1 AND status = 'available'
-      ORDER BY box_number ASC
-      LIMIT 1
-      FOR UPDATE SKIP LOCKED;
-    `;
-    result = await query(sql, [stationId]);
-  }
+  const result = await query(sql, [stationId, targetSize]);
 
   if (result.rows.length === 0) {
-    throw new Error('No available locker compartments at this station.');
+    throw new Error(`No available ${targetSize} locker compartments at this station.`);
   }
 
   return result.rows[0];

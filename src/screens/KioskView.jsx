@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, StyleSheet, SafeAreaView } from 'react-native';
+import { View, StyleSheet, SafeAreaView, Alert } from 'react-native';
 import { HomeScreen } from './HomeScreen';
 import { ContactDetailsScreen } from './ContactDetailsScreen';
 import { ServicePreferenceModal } from './ServicePreferenceModal';
 import { DoorOpenScreen } from './DoorOpenScreen';
 import { PickupScreen } from './PickupScreen';
 import { openLockerDoor } from '../native/LockerBridge';
-import { submitDropoffOrder } from '../services/api';
+import { submitDropoffOrder, fetchStationAvailability } from '../services/api';
 import { COLORS } from '../theme/colors';
 import { ENV } from '../config/env';
 
@@ -35,6 +35,28 @@ export function KioskView() {
   // Global 60-second inactivity timer reference
   // In Vanilla JS: let idleTimer = null;
   const idleTimerRef = useRef(null);
+
+  // Live locker station availability state (determines if station is FULL and per-size capacity)
+  const [stationAvailability, setStationAvailability] = useState({
+    totalAvailable: 16,
+    isStationFull: false,
+    sizeAvailability: { small: 4, medium: 8, large: 4 },
+  });
+
+  // Query live box availability whenever customer is on HOME or DROPOFF_PREFERENCE screen
+  useEffect(function () {
+    if (currentStep === 'HOME' || currentStep === 'DROPOFF_PREFERENCE') {
+      fetchStationAvailability(stationId).then(function (res) {
+        if (res && res.success) {
+          setStationAvailability({
+            totalAvailable: res.totalAvailable,
+            isStationFull: res.isStationFull,
+            sizeAvailability: res.sizeAvailability || { small: 4, medium: 8, large: 4 },
+          });
+        }
+      });
+    }
+  }, [currentStep, stationId]);
 
   // Resets the 60-second idle timer
   function resetIdleTimer() {
@@ -111,6 +133,17 @@ export function KioskView() {
 
     // Call Backend API with automatic dynamic box allocation
     const apiResponse = await submitDropoffOrder(customerOrderPayload);
+
+    // Fail-safe: If server rejected order (e.g. all lockers full), do NOT open door or advance screen
+    if (!apiResponse || !apiResponse.success) {
+      Alert.alert(
+        'Station Full',
+        apiResponse?.message || 'All locker compartments are currently occupied. Please try again later.',
+        [{ text: 'OK', onPress: handleResetToHome }]
+      );
+      return;
+    }
+
     const assignedCompartment = apiResponse.compartmentNumber || '01';
     const boxNumber = parseInt(assignedCompartment, 10);
     const boardId = 1;
@@ -169,6 +202,7 @@ export function KioskView() {
         {currentStep === 'HOME' && (
           <HomeScreen
             stationId={stationId}
+            isStationFull={stationAvailability.isStationFull}
             onStartDropoff={handleStartDropoff}
             onStartPickup={handleStartPickup}
           />
@@ -188,6 +222,7 @@ export function KioskView() {
           <View style={styles.fill}>
             <HomeScreen
               stationId={stationId}
+              isStationFull={stationAvailability.isStationFull}
               onStartDropoff={handleStartDropoff}
               onStartPickup={handleStartPickup}
             />
@@ -196,6 +231,7 @@ export function KioskView() {
               onClose={handleResetToHome}
               stationId={stationId}
               assignedBox={sessionOrder.assignedBox || '03'}
+              sizeAvailability={stationAvailability.sizeAvailability}
               onSaveAndUnlock={handlePreferenceComplete}
             />
           </View>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { COLORS, FONTS } from '../theme';
 import { ENV } from '../config/env';
 
@@ -9,11 +9,13 @@ import { ENV } from '../config/env';
 //   - Generous breathing space & high typography contrast
 //   - Zero emojis, zero feature clutter, zero walls of text
 //   - 2 large, confident, distraction-free touch actions: Drop Off & Pick Up
+//   - Smart capacity detection: Fades Drop Off when all lockers are occupied
 // ==============================================================================
 export function HomeScreen(props) {
   const onStartDropoff = props.onStartDropoff;
   const onStartPickup = props.onStartPickup;
   const stationId = props.stationId || ENV.stationId;
+  const isStationFull = Boolean(props.isStationFull);
 
   const [currentTime, setCurrentTime] = useState('');
 
@@ -30,6 +32,18 @@ export function HomeScreen(props) {
       clearInterval(timerId);
     };
   }, []);
+
+  function handleDropoffPress() {
+    if (isStationFull) {
+      Alert.alert(
+        'Station Full',
+        'All 16 locker compartments are currently occupied. Please check back later once customer laundry has been picked up.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    onStartDropoff();
+  }
 
   return (
     <View style={styles.container}>
@@ -68,17 +82,26 @@ export function HomeScreen(props) {
         {/* 2 Focused Minimalist Buttons */}
         <View style={styles.actionsContainer}>
           
-          {/* Button 1: Drop Off (Safety Orange #ea580c) */}
+          {/* Button 1: Drop Off (Safety Orange #ea580c, or Faded Slate if Full) */}
           <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={onStartDropoff}
-            style={styles.dropoffBtn}
+            activeOpacity={isStationFull ? 0.7 : 0.85}
+            onPress={handleDropoffPress}
+            style={[styles.dropoffBtn, isStationFull && styles.dropoffBtnDisabled]}
           >
             <View style={styles.btnTextCol}>
-              <Text style={styles.dropoffTitle}>Drop Off</Text>
-              <Text style={styles.dropoffSubtitle}>Leave clothes for wash & fold</Text>
+              <View style={styles.titleRow}>
+                <Text style={styles.dropoffTitle}>Drop Off</Text>
+                {isStationFull && (
+                  <View style={styles.fullBadge}>
+                    <Text style={styles.fullBadgeText}>STATION FULL</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.dropoffSubtitle, isStationFull && styles.dropoffSubtitleDisabled]}>
+                {isStationFull ? 'All compartments currently occupied' : 'Leave clothes for wash & fold'}
+              </Text>
             </View>
-            <Text style={styles.arrowWhite}>→</Text>
+            <Text style={[styles.arrowWhite, isStationFull && styles.arrowDisabled]}>→</Text>
           </TouchableOpacity>
 
           {/* Button 2: Pick Up (Crisp Slate Border) */}
@@ -214,6 +237,36 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 4,
+  },
+  dropoffBtnDisabled: {
+    backgroundColor: '#94a3b8', // Faded slate-400
+    shadowOpacity: 0,
+    elevation: 0,
+    opacity: 0.72,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  fullBadge: {
+    backgroundColor: '#dc2626', // Red-600 alert badge
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  fullBadgeText: {
+    fontFamily: FONTS.family,
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: 0.8,
+  },
+  dropoffSubtitleDisabled: {
+    color: 'rgba(255, 255, 255, 0.85)',
+  },
+  arrowDisabled: {
+    opacity: 0.5,
   },
   pickupBtn: {
     minHeight: 90,

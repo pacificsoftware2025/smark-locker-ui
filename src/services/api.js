@@ -42,17 +42,70 @@ export async function submitDropoffOrder(payload) {
     } else {
       const errData = await response.json().catch(() => ({}));
       console.warn('[Kiosk API] Server returned error:', errData.message);
+      return {
+        success: false,
+        message: errData.message || 'No available locker compartments at this station.',
+        isOfflineMode: false,
+      };
     }
   } catch (err) {
-    console.warn('[Kiosk API] Server unreachable, using local fallback:', err.message);
+    console.warn('[Kiosk API] Server unreachable:', err.message);
+    return {
+      success: false,
+      message: 'Network connection issue. Please check kiosk internet.',
+      isOfflineMode: true,
+    };
+  }
+}
+
+/**
+ * Fetches current locker availability counts from the station.
+ * @param {string} stationId Station ID (e.g. CMH-01)
+ */
+export async function fetchStationAvailability(stationId = ENV.stationId) {
+  const url = `${ENV.apiBaseUrl}/stations/${stationId}/availability`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const result = await response.json();
+      const availabilityList = result.availability || [];
+      const totalAvailable = availabilityList.reduce(function (sum, item) {
+        return sum + parseInt(item.available || '0', 10);
+      }, 0);
+
+      const sizeAvailability = {
+        small: 0,
+        medium: 0,
+        large: 0,
+      };
+      availabilityList.forEach(function (item) {
+        if (item.size) {
+          sizeAvailability[item.size.toLowerCase()] = parseInt(item.available || '0', 10);
+        }
+      });
+
+      return {
+        success: true,
+        totalAvailable: totalAvailable,
+        isStationFull: totalAvailable === 0,
+        sizeAvailability: sizeAvailability,
+      };
+    }
+  } catch (err) {
+    console.warn('[Kiosk API] Failed to fetch station availability:', err.message);
   }
 
-  // Graceful offline fallback mode (ensures kiosk never freezes in front of customers)
   return {
-    success: true,
-    orderId: 'LOCAL-' + Math.floor(1000 + Math.random() * 9000),
-    compartmentNumber: payload.compartmentNumber || '03',
-    isOfflineMode: true,
+    success: false,
+    totalAvailable: 16,
+    isStationFull: false,
+    sizeAvailability: { small: 4, medium: 8, large: 4 },
   };
 }
 
