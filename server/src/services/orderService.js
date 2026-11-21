@@ -108,6 +108,9 @@ export async function verifyClaimPin(pin) {
       pickup_box_number: '05',
       compartment_number: '05',
       service_tier: 'Wash, Dry & Fold',
+      weight_kg: 5.2,
+      amount: 210.00,
+      is_paid: false,
       status: 'ready_for_pickup',
     };
     return matched;
@@ -127,13 +130,108 @@ export async function verifyClaimPin(pin) {
 
   const order = result.rows[0];
 
-  // Mark order completed and release compartment
-  await query(`UPDATE orders SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [order.id]);
+  // If already paid, mark order completed and release compartment immediately
+  if (order.is_paid) {
+    await query(`UPDATE orders SET status = 'completed', updated_at = CURRENT_TIMESTAMP WHERE id = $1`, [order.id]);
+    if (order.pickup_box_number) {
+      await markCompartmentAvailable(order.station_id, order.pickup_box_number);
+    }
+  }
+
+  return order;
+}
+
+// Confirms customer cashless payment (QRPH / GCash) and releases compartment
+export async function confirmOrderPayment(orderId, paymentMethod = 'qrph', reference = null) {
+  const orderResult = await query('SELECT * FROM orders WHERE id = $1', [orderId]);
+  if (orderResult.rows.length === 0) {
+    throw new Error('Order not found');
+  }
+  const order = orderResult.rows[0];
+
+  const payRef = reference || `PAY-${Date.now().toString().slice(-6)}`;
+
+  // Mark order paid and completed
+  const updatedOrder = await query(
+    `UPDATE orders 
+     SET is_paid = TRUE, 
+         payment_reference = $1, 
+         status = 'completed', 
+         updated_at = CURRENT_TIMESTAMP 
+     WHERE id = $2 
+     RETURNING *`,
+    [payRef, orderId]
+  );
+
+  // Release compartment for new customer drop-offs
   if (order.pickup_box_number) {
     await markCompartmentAvailable(order.station_id, order.pickup_box_number);
   }
 
-  return order;
+  // Record permanent audit ledger in dedicated payments table (for Operator KPIs & Analytics)
+  const payAmount = order.amount ? parseFloat(order.amount) : 180.00;
+  try {
+    await query(
+      `INSERT INTO payments (order_id, station_id, amount, payment_method, payment_provider, reference_number, status, paid_at)
+       VALUES ($1, $2, $3, $4, 'paymongo', $5, 'paid', CURRENT_TIMESTAMP)`,
+      [orderId, order.station_id || 'CMH-01', payAmount, paymentMethod || 'gcash', payRef]
+    );
+  } catch (err) {
+    console.warn('[OrderService] Warning inserting to payments table:', err.message);
+  }
+
+  return updatedOrder.rows[0];
+}
+
+// Fetches financial analytics & KPIs for Operator Dashboard
+export async function getPaymentAnalytics(stationId) {
+  let whereClause = '';
+  const params = [];
+
+  if (stationId) {
+    whereClause = ' WHERE station_id = $1 ';
+    params.push(stationId);
+  }
+
+  // 1. Total revenue & transaction counts
+  const summarySql = `
+    SELECT 
+      COALESCE(SUM(amount), 0) AS total_revenue,
+      COUNT(*) AS total_transactions,
+      COALESCE(ROUND(AVG(amount), 2), 0) AS average_order_value
+    FROM payments
+    ${whereClause};
+  `;
+  const summaryRes = await query(summarySql, params);
+
+  // 2. Breakdown by payment method (GCash vs Maya vs QRPH)
+  const methodsSql = `
+    SELECT 
+      payment_method,
+      COUNT(*) AS count,
+      COALESCE(SUM(amount), 0) AS total
+    FROM payments
+    ${whereClause}
+    GROUP BY payment_method;
+  `;
+  const methodsRes = await query(methodsSql, params);
+
+  // 3. Recent 10 confirmed payments
+  const recentSql = `
+    SELECT p.*, o.customer_name, o.service_tier
+    FROM payments p
+    LEFT JOIN orders o ON p.order_id = o.id
+    ${whereClause ? whereClause.replace('station_id', 'p.station_id') : ''}
+    ORDER BY p.paid_at DESC
+    LIMIT 10;
+  `;
+  const recentRes = await query(recentSql, params);
+
+  return {
+    summary: summaryRes.rows[0] || { total_revenue: 0, total_transactions: 0, average_order_value: 0 },
+    byMethod: methodsRes.rows,
+    recentPayments: recentRes.rows,
+  };
 }
 
 // Fetches order by ID

@@ -51,9 +51,28 @@ CREATE TABLE IF NOT EXISTS orders (
 -- Migration helpers for existing tables
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS weight_kg NUMERIC(5,2);
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount NUMERIC(10,2);
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT FALSE;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_reference VARCHAR(100);
+
+-- 4. Dedicated Payments & Financial Audit Ledger (For Operator Analytics & KPIs)
+CREATE TABLE IF NOT EXISTS payments (
+  id SERIAL PRIMARY KEY,
+  order_id VARCHAR(50) NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+  station_id VARCHAR(50) NOT NULL REFERENCES locker_stations(id),
+  amount NUMERIC(10,2) NOT NULL,               -- e.g. 210.00 PHP
+  payment_method VARCHAR(50) DEFAULT 'gcash',  -- 'gcash', 'maya', 'qrph', 'cash'
+  payment_provider VARCHAR(50) DEFAULT 'paymongo',
+  reference_number VARCHAR(100) NOT NULL,       -- Transaction / OR number
+  status VARCHAR(20) DEFAULT 'paid',            -- 'paid', 'refunded', 'failed'
+  paid_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
 
 -- Indexes for lightning-fast queries
 CREATE INDEX IF NOT EXISTS idx_compartments_station_status ON locker_compartments(station_id, status);
 CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders(customer_phone);
 CREATE INDEX IF NOT EXISTS idx_orders_claim_pin ON orders(claim_pin);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_payments_station_id ON payments(station_id);
+CREATE INDEX IF NOT EXISTS idx_payments_paid_at ON payments(paid_at);
+CREATE INDEX IF NOT EXISTS idx_payments_method ON payments(payment_method);

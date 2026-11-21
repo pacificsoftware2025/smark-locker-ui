@@ -13,6 +13,12 @@ router.post('/dropoff', validateDropoffPayload, ordersController.handleDropoff);
 // Claim PIN verification (when customer inputs PIN on Pickup screen)
 router.post('/verify-pin', validatePinPayload, ordersController.handleVerifyPin);
 
+// Cashless payment confirmation (QRPH / GCash) to unlock compartment
+router.post('/:id/confirm-payment', ordersController.handleConfirmPayment);
+
+// Financial analytics & KPIs for Operator Dashboard (Revenue, Breakdown, Recent)
+router.get('/analytics/payments', ordersController.handleGetPaymentAnalytics);
+
 // Check order status
 router.get('/:id', ordersController.handleGetOrder);
 

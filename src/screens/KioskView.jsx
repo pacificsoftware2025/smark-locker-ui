@@ -5,6 +5,7 @@ import { ContactDetailsScreen } from './ContactDetailsScreen';
 import { ServicePreferenceModal } from './ServicePreferenceModal';
 import { DoorOpenScreen } from './DoorOpenScreen';
 import { PickupScreen } from './PickupScreen';
+import { PickupPaymentModal } from './PickupPaymentModal';
 import { openLockerDoor } from '../native/LockerBridge';
 import { submitDropoffOrder, fetchStationAvailability } from '../services/api';
 import { COLORS } from '../theme/colors';
@@ -23,6 +24,10 @@ export function KioskView() {
   // Current screen state
   // In Vanilla JS: let currentStep = 'HOME';
   const [currentStep, setCurrentStep] = useState('HOME');
+
+  // Cashless QRPH Payment Gate state
+  const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
+  const [pendingPaymentOrder, setPendingPaymentOrder] = useState(null);
 
   // Order state accumulated across the customer session
   const [sessionOrder, setSessionOrder] = useState({
@@ -171,13 +176,26 @@ export function KioskView() {
     setCurrentStep('PICKUP_PIN');
   }
 
-  // 5. Customer enters valid PIN code
-  async function handlePickupUnlocked(pickupData) {
-    const boxNumber = parseInt(pickupData.assignedBox || '5', 10);
+  // 5. Customer enters valid PIN code -> Checks if payment is required
+  function handlePickupUnlocked(pickupData) {
+    // If order has an unpaid balance, present the Dynamic QRPH Payment Gate
+    if (!pickupData.isPaid) {
+      setPendingPaymentOrder(pickupData);
+      setIsPaymentModalVisible(true);
+      return;
+    }
+
+    // If already paid, release compartment immediately
+    executeDoorUnlock(pickupData);
+  }
+
+  // Actuates physical solenoid and completes pickup
+  async function executeDoorUnlock(orderData) {
+    const boxNumber = parseInt(orderData.assignedBox || '5', 10);
     const boardId = 1;
 
     try {
-      // Trigger native Java hardware bridge
+      // Trigger native Java hardware bridge (untouched & identical)
       await openLockerDoor(boardId, boxNumber);
     } catch (err) {
       console.error('Failed to unlock pickup box:', err);
@@ -186,11 +204,12 @@ export function KioskView() {
     setSessionOrder(function (prev) {
       return {
         ...prev,
-        assignedBox: pickupData.assignedBox || '05',
-        customerName: pickupData.customerName || 'Customer',
+        assignedBox: orderData.assignedBox || '05',
+        customerName: orderData.customerName || 'Customer',
       };
     });
 
+    setIsPaymentModalVisible(false);
     setCurrentStep('DOOR_OPENED');
   }
 
@@ -253,6 +272,14 @@ export function KioskView() {
             onUnlockSuccess={handlePickupUnlocked}
           />
         )}
+
+        {/* STEP 3B: DYNAMIC QRPH / GCASH PAYMENT GATE */}
+        <PickupPaymentModal
+          visible={isPaymentModalVisible}
+          order={pendingPaymentOrder}
+          onClose={() => setIsPaymentModalVisible(false)}
+          onPaymentSuccess={executeDoorUnlock}
+        />
 
       </View>
     </SafeAreaView>

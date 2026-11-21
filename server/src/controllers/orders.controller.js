@@ -39,6 +39,10 @@ export async function handleVerifyPin(req, res, next) {
       });
     }
 
+    const billedAmount = order.amount ? parseFloat(order.amount) : 180.00;
+    const weightKg = order.weight_kg ? parseFloat(order.weight_kg) : 4.5;
+    const isPaid = Boolean(order.is_paid);
+
     return res.status(200).json({
       success: true,
       message: 'Claim PIN verified successfully.',
@@ -47,7 +51,47 @@ export async function handleVerifyPin(req, res, next) {
         assignedBox: order.pickup_box_number || order.compartment_number,
         customerName: order.customer_name,
         serviceTier: order.service_tier,
+        weightKg: weightKg,
+        amount: billedAmount,
+        isPaid: isPaid,
+        qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=00020101021226600016PH.GCASH.MERCHANT0114SMARTLOCKER0208${order.id}520459995303608540${billedAmount.toFixed(2)}5802PH5912SMARTLOCKER6006MANILA6304`,
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// POST /api/orders/:id/confirm-payment
+export async function handleConfirmPayment(req, res, next) {
+  try {
+    const { id } = req.params;
+    const { paymentMethod, reference } = req.body;
+    const order = await orderService.confirmOrderPayment(id, paymentMethod, reference);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Payment confirmed successfully. Locker unlocked.',
+      data: {
+        orderId: order.id,
+        assignedBox: order.pickup_box_number || order.compartment_number,
+        isPaid: true,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// GET /api/orders/analytics/payments (KPIs & Financial charts for Operator Dashboard)
+export async function handleGetPaymentAnalytics(req, res, next) {
+  try {
+    const { stationId } = req.query;
+    const analytics = await orderService.getPaymentAnalytics(stationId);
+
+    return res.status(200).json({
+      success: true,
+      data: analytics,
     });
   } catch (err) {
     next(err);

@@ -60,10 +60,16 @@ export function PickupScreen(props) {
       setIsVerifying(false);
 
       if (response.success) {
-        // Successfully verified -> opens pickup box
+        // Successfully verified -> passes full order & payment data
         onUnlockSuccess({
+          orderId: response.orderId,
           assignedBox: response.assignedBox || '05',
           customerName: response.customerName || 'Customer',
+          serviceTier: response.serviceTier,
+          weightKg: response.weightKg,
+          amount: response.amount,
+          isPaid: response.isPaid,
+          qrCodeUrl: response.qrCodeUrl,
         });
       } else {
         setErrorMessage(response.message || 'Invalid claim PIN. Please verify and try again.');
