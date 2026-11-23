@@ -18,6 +18,7 @@ export function HomeScreen(props) {
   const onOpenAdmin = props.onOpenAdmin;
   const stationId = props.stationId || ENV.stationId;
   const isStationFull = Boolean(props.isStationFull);
+  const isUnprovisioned = !stationId || stationId === 'SETUP REQUIRED';
 
   const [currentTime, setCurrentTime] = useState('');
   const [adminTapCount, setAdminTapCount] = useState(0);
@@ -37,8 +38,12 @@ export function HomeScreen(props) {
     };
   }, []);
 
-  // Secret 5-tap technician gesture on Station Name
+  // Technician gesture on Station Name (1 tap if unprovisioned, 5 taps if active)
   function handleSecretAdminTap() {
+    if (isUnprovisioned) {
+      if (onOpenAdmin) onOpenAdmin();
+      return;
+    }
     const now = Date.now();
     if (now - lastTapRef.current < 2500) {
       const nextTaps = adminTapCount + 1;
@@ -56,6 +61,17 @@ export function HomeScreen(props) {
   }
 
   function handleDropoffPress() {
+    if (isUnprovisioned) {
+      Alert.alert(
+        'Machine Setup Required',
+        'This locker station has not been provisioned yet. Please contact a technician or tap "Open Setup" to configure.',
+        [
+          { text: 'Open Setup', onPress: () => { if (onOpenAdmin) onOpenAdmin(); } },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
     if (isStationFull) {
       Alert.alert(
         'Station Full',
@@ -75,13 +91,19 @@ export function HomeScreen(props) {
       {/* ------------------------------------------------------------- */}
       <View style={styles.topBar}>
         <TouchableOpacity
-          activeOpacity={0.8}
+          activeOpacity={0.7}
           onPress={handleSecretAdminTap}
           style={styles.stationGroup}
         >
           <Text style={styles.brandName}>Smart Locker</Text>
           <Text style={styles.stationDivider}>/</Text>
-          <Text style={styles.stationCode}>{stationId}</Text>
+          {isUnprovisioned ? (
+            <View style={styles.unprovisionedBadge}>
+              <Text style={styles.unprovisionedBadgeText}>SETUP REQUIRED</Text>
+            </View>
+          ) : (
+            <Text style={styles.stationCode}>{stationId}</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.statusGroup}>
@@ -108,26 +130,34 @@ export function HomeScreen(props) {
         {/* 2 Focused Minimalist Buttons */}
         <View style={styles.actionsContainer}>
           
-          {/* Button 1: Drop Off (Safety Orange #ea580c, or Faded Slate if Full) */}
+          {/* Button 1: Drop Off (Safety Orange #ea580c, or Faded Slate if Full/Unprovisioned) */}
           <TouchableOpacity
-            activeOpacity={isStationFull ? 0.7 : 0.85}
+            activeOpacity={isStationFull || isUnprovisioned ? 0.7 : 0.85}
             onPress={handleDropoffPress}
-            style={[styles.dropoffBtn, isStationFull && styles.dropoffBtnDisabled]}
+            style={[styles.dropoffBtn, (isStationFull || isUnprovisioned) && styles.dropoffBtnDisabled]}
           >
             <View style={styles.btnTextCol}>
               <View style={styles.titleRow}>
                 <Text style={styles.dropoffTitle}>Drop Off</Text>
-                {isStationFull && (
+                {isUnprovisioned ? (
+                  <View style={styles.setupRequiredActionBadge}>
+                    <Text style={styles.setupRequiredActionBadgeText}>SETUP REQUIRED</Text>
+                  </View>
+                ) : isStationFull ? (
                   <View style={styles.fullBadge}>
                     <Text style={styles.fullBadgeText}>STATION FULL</Text>
                   </View>
-                )}
+                ) : null}
               </View>
-              <Text style={[styles.dropoffSubtitle, isStationFull && styles.dropoffSubtitleDisabled]}>
-                {isStationFull ? 'All compartments currently occupied' : 'Leave clothes for wash & fold'}
+              <Text style={[styles.dropoffSubtitle, (isStationFull || isUnprovisioned) && styles.dropoffSubtitleDisabled]}>
+                {isUnprovisioned
+                  ? 'Machine setup required by technician'
+                  : isStationFull
+                  ? 'All compartments currently occupied'
+                  : 'Leave clothes for wash & fold'}
               </Text>
             </View>
-            <Text style={[styles.arrowWhite, isStationFull && styles.arrowDisabled]}>→</Text>
+            <Text style={[styles.arrowWhite, (isStationFull || isUnprovisioned) && styles.arrowDisabled]}>→</Text>
           </TouchableOpacity>
 
           {/* Button 2: Pick Up (Crisp Slate Border) */}
@@ -200,6 +230,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.slate500,
+  },
+  unprovisionedBadge: {
+    backgroundColor: '#fff7ed', // Amber/Orange-50
+    borderColor: '#ea580c',     // Safety Orange
+    borderWidth: 1.5,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  unprovisionedBadgeText: {
+    fontFamily: FONTS.family,
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#ea580c',
+    letterSpacing: 0.5,
   },
   statusGroup: {
     flexDirection: 'row',
@@ -282,6 +327,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   fullBadgeText: {
+    fontFamily: FONTS.family,
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: 0.8,
+  },
+  setupRequiredActionBadge: {
+    backgroundColor: '#d97706', // Amber-600 alert badge
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  setupRequiredActionBadgeText: {
     fontFamily: FONTS.family,
     fontSize: 10,
     fontWeight: '900',

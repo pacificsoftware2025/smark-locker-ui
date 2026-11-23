@@ -5,7 +5,7 @@
 // In Vanilla JS / Express analogy:
 //   const config = {
 //     apiBaseUrl: process.env.API_BASE_URL || 'http://localhost:5000/api',
-//     stationId: process.env.LOCKER_STATION_ID || 'CMH-01'
+//     stationId: process.env.LOCKER_STATION_ID || 'SETUP REQUIRED'
 //   };
 // ==============================================================================
 
@@ -14,8 +14,8 @@ export const ENV = {
   apiBaseUrl: (typeof process !== 'undefined' && process.env && process.env.API_BASE_URL) || 'https://smart-laundry-locker-api.onrender.com/api',
 
   // 2. Kiosk Station Identity
-  stationId: (typeof process !== 'undefined' && process.env && process.env.LOCKER_STATION_ID) || 'CMH-01',
-  stationName: (typeof process !== 'undefined' && process.env && process.env.LOCKER_STATION_NAME) || 'Central Mall Depot',
+  stationId: (typeof process !== 'undefined' && process.env && process.env.LOCKER_STATION_ID) || 'SETUP REQUIRED',
+  stationName: (typeof process !== 'undefined' && process.env && process.env.LOCKER_STATION_NAME) || 'Unprovisioned Station',
 
   // 3. Android RS485 Serial Port Hardware Settings
   serialPort: (typeof process !== 'undefined' && process.env && process.env.SERIAL_PORT) || '/dev/ttyS3',

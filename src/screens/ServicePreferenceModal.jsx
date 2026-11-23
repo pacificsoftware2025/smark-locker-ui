@@ -28,7 +28,7 @@ export function ServicePreferenceModal(props) {
   const visible = props.visible;
   const onClose = props.onClose;
   const onSaveAndUnlock = props.onSaveAndUnlock;
-  const stationId = props.stationId || 'CMH-01';
+  const stationId = props.stationId || 'SETUP REQUIRED';
   const assignedBox = props.assignedBox || '03';
   const sizeAvailability = props.sizeAvailability || { small: 4, medium: 8, large: 4 };
 

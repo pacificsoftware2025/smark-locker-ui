@@ -60,9 +60,19 @@ export async function submitDropoffOrder(payload) {
 
 /**
  * Fetches current locker availability counts from the station.
- * @param {string} stationId Station ID (e.g. CMH-01)
+ * @param {string} stationId Station ID (e.g. SLL-12901 or SETUP REQUIRED)
  */
 export async function fetchStationAvailability(stationId = ENV.stationId) {
+  // If station is unprovisioned, immediately flag as full / setup required without making network call
+  if (!stationId || stationId === 'SETUP REQUIRED') {
+    return {
+      success: true,
+      totalAvailable: 0,
+      isStationFull: true,
+      sizeAvailability: { small: 0, medium: 0, large: 0 },
+    };
+  }
+
   const url = `${ENV.apiBaseUrl}/stations/${stationId}/availability`;
 
   try {

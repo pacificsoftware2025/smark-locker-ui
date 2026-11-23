@@ -57,8 +57,8 @@ export async function loadMachineConfig() {
 
   // 3. Fallback to .env defaults
   return {
-    stationId: ENV.stationId || 'CMH-01',
-    stationName: ENV.stationName || 'Central Mall Depot',
+    stationId: ENV.stationId || 'SETUP REQUIRED',
+    stationName: ENV.stationName || 'Unprovisioned Locker Station',
     totalDoors: 16,
     locationTag: 'Level 1, Main Entrance',
     doorSizes: null,
@@ -69,8 +69,8 @@ export async function loadMachineConfig() {
  * Persists station configuration to both Native SharedPreferences and localStorage.
  */
 export async function saveMachineConfig(config) {
-  const stationId = config.stationId || 'CMH-01';
-  const stationName = config.stationName || 'Central Mall Depot';
+  const stationId = config.stationId || 'SETUP REQUIRED';
+  const stationName = config.stationName || 'Unprovisioned Locker Station';
   const totalDoors = Number(config.totalDoors || 16);
   const locationTag = config.locationTag || 'Level 1, Main Entrance';
   const doorSizes = config.doorSizes || null;

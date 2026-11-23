@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,18 +9,19 @@ import {
   ScrollView,
   ActivityIndicator,
   Platform,
-  Switch,
 } from 'react-native';
 import { COLORS } from '../theme/colors';
 import { openLockerDoor } from '../native/LockerBridge';
 import { saveMachineConfig } from '../services/storage';
 import { syncStationConfig } from '../services/api';
+import { LoggerService } from '../services/logger';
 
 // ==============================================================================
 // REACT NATIVE COMPONENT: AdminSetupModal
 // Commercial Laundry Locker Settings & Hardware Diagnostics Portal.
 // Theme: Safety Orange (#ea580c) & High-Contrast Slate neutrals.
 // Typography: Plus Jakarta Sans uniformly across all components.
+// Strictly zero emojis.
 // ==============================================================================
 
 const MASTER_PIN = '999999';
@@ -32,12 +33,19 @@ const FONT_FAMILY = Platform.select({
   default: 'sans-serif',
 });
 
+const MONO_FONT = Platform.select({
+  web: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+  android: 'monospace',
+  ios: 'Courier',
+  default: 'monospace',
+});
+
 export function AdminSetupModal(props) {
   const visible = Boolean(props.visible);
   const onClose = props.onClose;
   const currentConfig = props.currentConfig || {
-    stationId: 'SLL-2016',
-    stationName: 'Central Mall Hub Locker 1',
+    stationId: 'SETUP REQUIRED',
+    stationName: 'Unprovisioned Locker Station',
     totalDoors: 16,
   };
   const onConfigUpdated = props.onConfigUpdated;
@@ -47,12 +55,17 @@ export function AdminSetupModal(props) {
   const [pinInput, setPinInput] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // Active Navigation Tab: 'identity' | 'capacity' | 'relays' | 'hardware' | 'network'
+  // Active Navigation Tab: 'identity' | 'capacity' | 'relays' | 'logs'
   const [activeTab, setActiveTab] = useState('identity');
 
   // Configuration form fields
-  const [stationId, setStationId] = useState(currentConfig.stationId || 'SLL-2016');
-  const [stationName, setStationName] = useState(currentConfig.stationName || 'Central Mall Hub Locker 1');
+  const isCurrentlyUnprovisioned = !currentConfig.stationId || currentConfig.stationId === 'SETUP REQUIRED';
+  const [stationId, setStationId] = useState(isCurrentlyUnprovisioned ? '' : currentConfig.stationId);
+  const [stationName, setStationName] = useState(
+    currentConfig.stationName === 'Unprovisioned Station' || currentConfig.stationName === 'Unprovisioned Locker Station'
+      ? ''
+      : (currentConfig.stationName || '')
+  );
   const [locationTag, setLocationTag] = useState('Level 1, Main Entrance');
   const [totalDoors, setTotalDoors] = useState(Number(currentConfig.totalDoors || 16));
 
@@ -70,25 +83,67 @@ export function AdminSetupModal(props) {
   // Hardware Diagnostic State
   const [testingDoor, setTestingDoor] = useState(null);
   const [testStatusMessage, setTestStatusMessage] = useState('');
+  const [isCycleTesting, setIsCycleTesting] = useState(false);
+  const cycleTestingRef = useRef(false);
+
+  // System & Error Logs State
+  const [systemLogs, setSystemLogs] = useState(() => LoggerService.getLogs());
+  const [logFilter, setLogFilter] = useState('ALL');
+
+  // Database Save Feedback
   const [isSavedFeedback, setIsSavedFeedback] = useState(false);
   const [isSavingDb, setIsSavingDb] = useState(false);
   const [saveStatusText, setSaveStatusText] = useState('');
-  const [simulationFallback, setSimulationFallback] = useState(true);
 
-  // Network Ping State
-  const [pingStatus, setPingStatus] = useState('');
-  const [isPinging, setIsPinging] = useState(false);
+  // Subscribe to live log events
+  useEffect(() => {
+    const unsubscribe = LoggerService.subscribe((updatedLogs) => {
+      setSystemLogs(updatedLogs);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Cleanup cycle test on unmount
+  useEffect(() => {
+    return () => {
+      cycleTestingRef.current = false;
+    };
+  }, []);
 
   // Authenticate Master PIN
-  function handlePinSubmit() {
-    if (pinInput === MASTER_PIN) {
+  function verifyPinCode(codeToVerify) {
+    const code = codeToVerify || pinInput;
+    if (code === MASTER_PIN) {
       setViewState('SETUP');
       setPinInput('');
       setAuthError('');
+      LoggerService.addLog('INFO', 'AUTH', 'Master Technician authenticated successfully (PIN verified).');
     } else {
-      setAuthError('Incorrect Master Admin PIN. Access denied.');
+      setAuthError('Incorrect Master Security PIN. Access denied.');
       setPinInput('');
+      LoggerService.addLog('WARN', 'AUTH', 'Unauthorized Master PIN attempt rejected.');
     }
+  }
+
+  function handleNumpadPress(digit) {
+    if (pinInput.length < 6) {
+      const next = pinInput + digit;
+      setPinInput(next);
+      if (authError) setAuthError('');
+      if (next.length === 6) {
+        verifyPinCode(next);
+      }
+    }
+  }
+
+  function handleNumpadBackspace() {
+    setPinInput((prev) => prev.slice(0, -1));
+    if (authError) setAuthError('');
+  }
+
+  function handleNumpadClear() {
+    setPinInput('');
+    if (authError) setAuthError('');
   }
 
   // Generate Permanent Locker ID: "SLL-${randomNumbers}"
@@ -96,6 +151,7 @@ export function AdminSetupModal(props) {
     const randomNum = Math.floor(10000 + Math.random() * 90000); // 5-digit random number
     const generatedId = `SLL-${randomNum}`;
     setStationId(generatedId);
+    LoggerService.addLog('INFO', 'SYSTEM', `New Locker ID generated: ${generatedId}`);
   }
 
   // Set individual door size
@@ -107,50 +163,19 @@ export function AdminSetupModal(props) {
     });
   }
 
-  // Bulk set all doors to a specific size
-  function handleSetAllSizes(size) {
-    setDoorSizes(function(prev) {
-      const next = { ...prev };
-      for (let i = 1; i <= totalDoors; i++) {
-        next[i] = size;
-      }
-      return next;
-    });
-  }
-
-  // Smart balanced distribution based on total doors (approx 25% Small, 60% Medium, 15% Large)
-  function handleSetBalancedDistribution() {
-    setDoorSizes(function(prev) {
-      const next = { ...prev };
-      const smallCount = Math.max(1, Math.round(totalDoors * 0.25));
-      const largeCount = Math.max(1, Math.round(totalDoors * 0.15));
-      for (let i = 1; i <= totalDoors; i++) {
-        if (i <= smallCount) {
-          next[i] = 'small';
-        } else if (i <= totalDoors - largeCount) {
-          next[i] = 'medium';
-        } else {
-          next[i] = 'large';
-        }
-      }
-      return next;
-    });
-  }
-
-  // Calculate live door size breakdown
-  const smallDoorCount = Array.from({ length: totalDoors }, (_, i) => i + 1).filter(
-    (n) => (doorSizes[n] || 'medium') === 'small'
-  ).length;
-  const mediumDoorCount = Array.from({ length: totalDoors }, (_, i) => i + 1).filter(
-    (n) => (doorSizes[n] || 'medium') === 'medium'
-  ).length;
-  const largeDoorCount = Array.from({ length: totalDoors }, (_, i) => i + 1).filter(
-    (n) => (doorSizes[n] || 'medium') === 'large'
-  ).length;
-
   // Save Configuration to SharedPreferences & PostgreSQL Database
   async function handleSaveConfig() {
     if (isSavingDb) return;
+
+    if (!stationId || stationId.trim() === '' || stationId.trim() === 'SETUP REQUIRED') {
+      Alert.alert(
+        'Locker ID Required',
+        'Please tap "Generate Locker ID" before saving station configuration.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     setIsSavingDb(true);
     setSaveStatusText('Saving to PostgreSQL Database...');
 
@@ -162,6 +187,12 @@ export function AdminSetupModal(props) {
       doorSizes: doorSizes,
     };
 
+    LoggerService.addLog(
+      'INFO',
+      'API_SYNC',
+      `Starting station sync for ${newConfig.stationId} (${newConfig.totalDoors} compartments)...`
+    );
+
     // 1. Save locally to Android SharedPreferences & Local Storage
     await saveMachineConfig(newConfig);
 
@@ -171,15 +202,35 @@ export function AdminSetupModal(props) {
       setIsSavedFeedback(true);
       if (syncResult && syncResult.success) {
         setSaveStatusText(`Saved to Database (${newConfig.stationId})`);
+        LoggerService.addLog(
+          'SUCCESS',
+          'API_SYNC',
+          `Station ${newConfig.stationId} and ${newConfig.totalDoors} doors successfully synced to PostgreSQL.`
+        );
       } else if (syncResult && syncResult.isOfflineMode) {
         setSaveStatusText('Saved to Locker (Offline Mode)');
+        LoggerService.addLog(
+          'WARN',
+          'API_SYNC',
+          `Cloud API unreachable. Configuration cached offline in local storage.`
+        );
       } else {
         setSaveStatusText('Saved to Locker (DB Sync Pending)');
+        LoggerService.addLog(
+          'WARN',
+          'API_SYNC',
+          `DB sync returned non-critical status. Local settings updated.`
+        );
       }
     } catch (err) {
       console.warn('[AdminModal] Database sync failed:', err.message);
       setIsSavedFeedback(true);
       setSaveStatusText('Saved Locally to Locker');
+      LoggerService.addLog(
+        'ERROR',
+        'API_SYNC',
+        `Cloud sync exception for ${newConfig.stationId}: ${err.message}`
+      );
     } finally {
       setIsSavingDb(false);
     }
@@ -197,39 +248,112 @@ export function AdminSetupModal(props) {
 
   // Direct Hardware Relay Test
   async function handleTestDoor(doorNumber) {
-    if (testingDoor !== null) return;
+    if (testingDoor !== null || isCycleTesting) return;
     setTestingDoor(doorNumber);
     setTestStatusMessage(`Sending 0x04 unlock pulse to Lock Board 1, Door #${doorNumber}...`);
+    LoggerService.addLog(
+      'HARDWARE',
+      'RELAY',
+      `Manual relay actuation pulse sent to Door #${doorNumber} (Port: /dev/ttyS3, 200ms).`
+    );
 
     try {
       await openLockerDoor(1, doorNumber);
       setTestStatusMessage(`Success: Door #${doorNumber} solenoid actuated (200ms pulse).`);
+      LoggerService.addLog(
+        'SUCCESS',
+        'RELAY',
+        `Door #${doorNumber} solenoid energized successfully.`
+      );
     } catch (err) {
       setTestStatusMessage(`Hardware Error on Door #${doorNumber}: ${err.message}`);
+      LoggerService.addLog(
+        'ERROR',
+        'SERIAL_RS485',
+        `Hardware error actuating Door #${doorNumber}: ${err.message}`
+      );
     } finally {
       setTimeout(() => {
         setTestingDoor(null);
-      }, 1500);
+      }, 1200);
     }
   }
 
-  // Ping Backend API
-  async function handlePingApi() {
-    setIsPinging(true);
-    setPingStatus('Pinging Render Cloud API...');
-    try {
-      const res = await fetch('https://smart-laundry-locker-api.onrender.com/api/stations/CMH-01/status');
-      if (res.ok) {
-        setPingStatus('Online: Connected to PostgreSQL Render Backend (HTTP 200)');
-      } else {
-        setPingStatus(`Server returned HTTP ${res.status}`);
+  // Sequential Cycle Test (Actuates each door one by one)
+  async function handleSequentialCycleTest() {
+    if (isCycleTesting || testingDoor !== null) return;
+    setIsCycleTesting(true);
+    cycleTestingRef.current = true;
+    LoggerService.addLog(
+      'INFO',
+      'RELAY',
+      `Starting sequential cycle test across all ${totalDoors} connected doors...`
+    );
+
+    for (let doorNum = 1; doorNum <= totalDoors; doorNum++) {
+      if (!cycleTestingRef.current) {
+        setTestStatusMessage('Sequential cycle test aborted by technician.');
+        LoggerService.addLog('WARN', 'RELAY', 'Sequential cycle test stopped by user.');
+        break;
       }
-    } catch (err) {
-      setPingStatus(`Connection failed: ${err.message}`);
-    } finally {
-      setIsPinging(false);
+
+      setTestingDoor(doorNum);
+      setTestStatusMessage(`Sequential Test: Actuating Door #${doorNum} of ${totalDoors}...`);
+
+      try {
+        await openLockerDoor(1, doorNum);
+        LoggerService.addLog(
+          'HARDWARE',
+          'RELAY',
+          `Sequential test Door #${doorNum}/${totalDoors} actuated.`
+        );
+      } catch (err) {
+        LoggerService.addLog(
+          'ERROR',
+          'SERIAL_RS485',
+          `Sequential test Door #${doorNum} failed: ${err.message}`
+        );
+      }
+
+      // Safe pause between solenoid pulses to prevent power supply current spike
+      await new Promise((resolve) => setTimeout(resolve, 1100));
     }
+
+    if (cycleTestingRef.current) {
+      setTestStatusMessage(`Sequential cycle test finished: All ${totalDoors} relays verified.`);
+      LoggerService.addLog(
+        'SUCCESS',
+        'RELAY',
+        `Sequential test complete: All ${totalDoors} door relays cycled successfully.`
+      );
+    }
+
+    setIsCycleTesting(false);
+    setTestingDoor(null);
+    cycleTestingRef.current = false;
   }
+
+  function handleStopCycleTest() {
+    cycleTestingRef.current = false;
+    setIsCycleTesting(false);
+    setTestingDoor(null);
+    setTestStatusMessage('Sequential test stopped.');
+  }
+
+  // Filtered Logs
+  const filteredLogs = systemLogs.filter((entry) => {
+    if (logFilter === 'ALL') return true;
+    if (logFilter === 'ERROR') return entry.level === 'ERROR' || entry.level === 'WARN';
+    if (logFilter === 'HARDWARE') return entry.component === 'SERIAL_RS485' || entry.component === 'RELAY' || entry.level === 'HARDWARE';
+    if (logFilter === 'API') return entry.component === 'API_SYNC' || entry.component === 'DATABASE';
+    if (logFilter === 'SYSTEM') return entry.component === 'SYSTEM' || entry.component === 'AUTH';
+    return true;
+  });
+
+  const errorCount = systemLogs.filter((l) => l.level === 'ERROR').length;
+  const hardwareCount = systemLogs.filter((l) => l.component === 'SERIAL_RS485' || l.component === 'RELAY' || l.level === 'HARDWARE').length;
+  const apiCount = systemLogs.filter((l) => l.component === 'API_SYNC' || l.component === 'DATABASE').length;
+  const systemCount = systemLogs.filter((l) => l.component === 'SYSTEM' || l.component === 'AUTH').length;
 
   if (!visible) return null;
 
@@ -239,7 +363,7 @@ export function AdminSetupModal(props) {
         <View style={styles.card}>
           
           {/* ========================================================= */}
-          {/* TOP BAR: Title & Close Button (No segment switch)         */}
+          {/* TOP BAR: Title & Close Button                             */}
           {/* ========================================================= */}
           <View style={styles.topBar}>
             <View style={styles.titleGroup}>
@@ -253,41 +377,139 @@ export function AdminSetupModal(props) {
           </View>
 
           {/* ========================================================= */}
-          {/* VIEW 1: PIN AUTHENTICATION                                */}
+          {/* VIEW 1: COMMERCIAL TECHNICIAN PIN AUTHENTICATION          */}
           {/* ========================================================= */}
           {viewState === 'AUTH' ? (
-            <View style={styles.authContainer}>
-              <View style={styles.lockIconCircle}>
-                <Text style={styles.lockIconText}>🔒</Text>
+            <View style={styles.authSplitLayout}>
+              
+              {/* LEFT COLUMN: Industrial Security Identity Card */}
+              <View style={styles.authInfoCol}>
+                <View style={styles.securityBadge}>
+                  <View style={styles.securityPulseDot} />
+                  <Text style={styles.securityBadgeText}>RESTRICTED TERMINAL</Text>
+                </View>
+
+                <View style={styles.authTitleGroup}>
+                  <Text style={styles.authMainTitle}>Technician Gateway</Text>
+                  <Text style={styles.authMainSub}>
+                    Commercial machine provisioning and hardware diagnostics.
+                  </Text>
+                </View>
+
+                {/* Machine Telemetry Metadata */}
+                <View style={styles.authTelemetryBox}>
+                  <View style={styles.telemetryRow}>
+                    <Text style={styles.telemetryLabel}>LOCKER STATION</Text>
+                    <Text style={styles.telemetryValue}>{stationId || 'SLL-READY'}</Text>
+                  </View>
+                  <View style={styles.telemetryRow}>
+                    <Text style={styles.telemetryLabel}>HARDWARE BUS</Text>
+                    <Text style={styles.telemetryValue}>RS485 /dev/ttyS3</Text>
+                  </View>
+                  <View style={styles.telemetryRow}>
+                    <Text style={styles.telemetryLabel}>SECURITY LEVEL</Text>
+                    <Text style={styles.telemetryValue}>Tier-1 Master Admin</Text>
+                  </View>
+                </View>
+
+                <View style={styles.authNoticeCard}>
+                  <Text style={styles.authNoticeText}>
+                    Authorized service personnel only. All access attempts are recorded in the onboard tamper buffer.
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.authTitle}>Master Security PIN</Text>
-              <Text style={styles.authSub}>
-                Enter the 6-digit Master Technician PIN to access hardware diagnostics and locker settings.
-              </Text>
 
-              <TextInput
-                style={styles.pinInput}
-                value={pinInput}
-                onChangeText={setPinInput}
-                placeholder="Enter PIN (Default: 999999)"
-                placeholderTextColor={COLORS.slate400}
-                keyboardType="numeric"
-                secureTextEntry={true}
-                maxLength={6}
-                onSubmitEditing={handlePinSubmit}
-              />
+              {/* RIGHT COLUMN: Touch Numpad & Masked PIN Display */}
+              <View style={styles.authNumpadCol}>
+                <View style={styles.numpadHeader}>
+                  <Text style={styles.numpadTitle}>Enter Master PIN</Text>
+                  <Text style={styles.numpadSub}>
+                    Use the touch keypad to enter your 6-digit access code
+                  </Text>
+                </View>
 
-              {Boolean(authError) && (
-                <Text style={styles.authErrorText}>{authError}</Text>
-              )}
+                {/* Validation Error Message */}
+                {Boolean(authError) && (
+                  <View style={styles.authAlertBox}>
+                    <View style={styles.authAlertDot} />
+                    <Text style={styles.authAlertText}>{authError}</Text>
+                  </View>
+                )}
 
-              <TouchableOpacity
-                style={styles.authSubmitBtn}
-                onPress={handlePinSubmit}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.authSubmitBtnText}>Unlock Admin Panel</Text>
-              </TouchableOpacity>
+                {/* 6 Masked PIN Indicator Slots */}
+                <View style={styles.pinSlotsRow}>
+                  {[0, 1, 2, 3, 4, 5].map((index) => {
+                    const isFilled = pinInput.length > index;
+                    const isActive = pinInput.length === index;
+                    return (
+                      <View
+                        key={index}
+                        style={[
+                          styles.pinSlot,
+                          isFilled && styles.pinSlotFilled,
+                          isActive && styles.pinSlotActive,
+                        ]}
+                      >
+                        {isFilled ? (
+                          <View style={styles.pinDotMasked} />
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </View>
+
+                {/* 3x4 Tactile Touch Keypad */}
+                <View style={styles.touchKeypadGrid}>
+                  {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                    <TouchableOpacity
+                      key={digit}
+                      style={styles.keypadBtn}
+                      onPress={() => handleNumpadPress(digit)}
+                      activeOpacity={0.65}
+                    >
+                      <Text style={styles.keypadDigitText}>{digit}</Text>
+                    </TouchableOpacity>
+                  ))}
+
+                  <TouchableOpacity
+                    style={[styles.keypadBtn, styles.keypadActionBtn]}
+                    onPress={handleNumpadClear}
+                    activeOpacity={0.65}
+                  >
+                    <Text style={styles.keypadClearText}>CLEAR</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.keypadBtn}
+                    onPress={() => handleNumpadPress('0')}
+                    activeOpacity={0.65}
+                  >
+                    <Text style={styles.keypadDigitText}>0</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.keypadBtn, styles.keypadActionBtn]}
+                    onPress={handleNumpadBackspace}
+                    activeOpacity={0.65}
+                  >
+                    <Text style={styles.keypadBackText}>DEL</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Submit Action Button */}
+                <TouchableOpacity
+                  style={[
+                    styles.authSubmitBtn,
+                    pinInput.length !== 6 && styles.authSubmitBtnDisabled,
+                  ]}
+                  onPress={() => verifyPinCode()}
+                  disabled={pinInput.length !== 6}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.authSubmitBtnText}>Unlock Admin Panel</Text>
+                </TouchableOpacity>
+              </View>
+
             </View>
           ) : (
             /* ========================================================= */
@@ -296,7 +518,7 @@ export function AdminSetupModal(props) {
             <View style={styles.mainContainer}>
               
               {/* ------------------------------------------------------- */}
-              {/* LEFT COLUMN: NAVIGATION BAR (ALL CHECKS REMOVED)       */}
+              {/* LEFT COLUMN: NAVIGATION BAR                            */}
               {/* ------------------------------------------------------- */}
               <View style={styles.leftNavbar}>
                 <View style={styles.navList}>
@@ -354,35 +576,25 @@ export function AdminSetupModal(props) {
                   <TouchableOpacity
                     style={[
                       styles.navItem,
-                      activeTab === 'hardware' && styles.navItemActive,
+                      activeTab === 'logs' && styles.navItemActive,
                     ]}
-                    onPress={() => setActiveTab('hardware')}
+                    onPress={() => setActiveTab('logs')}
                   >
-                    <Text
-                      style={[
-                        styles.navItemText,
-                        activeTab === 'hardware' && styles.navItemTextActive,
-                      ]}
-                    >
-                      Hardware & Serial
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.navItem,
-                      activeTab === 'network' && styles.navItemActive,
-                    ]}
-                    onPress={() => setActiveTab('network')}
-                  >
-                    <Text
-                      style={[
-                        styles.navItemText,
-                        activeTab === 'network' && styles.navItemTextActive,
-                      ]}
-                    >
-                      Network & Cloud
-                    </Text>
+                    <View style={styles.navItemWithBadgeRow}>
+                      <Text
+                        style={[
+                          styles.navItemText,
+                          activeTab === 'logs' && styles.navItemTextActive,
+                        ]}
+                      >
+                        System & Error Logs
+                      </Text>
+                      {errorCount > 0 && (
+                        <View style={styles.navErrorBadge}>
+                          <Text style={styles.navErrorBadgeText}>{errorCount}</Text>
+                        </View>
+                      )}
+                    </View>
                   </TouchableOpacity>
                 </View>
 
@@ -397,14 +609,13 @@ export function AdminSetupModal(props) {
               {/* ------------------------------------------------------- */}
               <ScrollView style={styles.rightContent} showsVerticalScrollIndicator={false}>
                 
-                {/* PANEL HEADER WITH SECTION TITLE (DUPLICATE SAVE REMOVED) */}
+                {/* PANEL HEADER */}
                 <View style={styles.panelHeaderRow}>
                   <Text style={styles.panelTitle}>
                     {activeTab === 'identity' && 'Locker Identity'}
                     {activeTab === 'capacity' && 'Capacity & Compartment Door Sizes'}
                     {activeTab === 'relays' && 'Relay Actuation Diagnostics'}
-                    {activeTab === 'hardware' && 'Serial Port & RS485 Controller'}
-                    {activeTab === 'network' && 'Cloud API & Synchronization'}
+                    {activeTab === 'logs' && 'System Telemetry & Error Logs'}
                   </Text>
                 </View>
 
@@ -414,18 +625,15 @@ export function AdminSetupModal(props) {
                 {activeTab === 'identity' && (
                   <View style={styles.settingsGroup}>
                     
-                    {/* Locker ID with Integrated Generator */}
+                    {/* Locker ID with Integrated Generator & Disabled Manual Input */}
                     <View style={styles.fieldBlock}>
-                      <View style={styles.labelWithHintRow}>
-                        <Text style={styles.fieldLabel}>Locker ID</Text>
-                        <Text style={styles.labelHintText}>Format: SLL-&#123;randomNumbers&#125;</Text>
-                      </View>
+                      <Text style={styles.fieldLabel}>Locker ID</Text>
                       <View style={styles.idInputGroup}>
                         <TextInput
-                          style={styles.idInputField}
+                          style={[styles.idInputField, styles.idInputFieldDisabled]}
                           value={stationId}
-                          onChangeText={setStationId}
-                          placeholder="e.g. SLL-36641"
+                          editable={false}
+                          placeholder="Tap 'Generate Locker ID'"
                           autoCapitalize="characters"
                         />
                         <TouchableOpacity
@@ -456,7 +664,7 @@ export function AdminSetupModal(props) {
                         style={styles.textInput}
                         value={locationTag}
                         onChangeText={setLocationTag}
-                        placeholder="e.g. Level 1, East Entrance (Beside Hypermarket)"
+                        placeholder="e.g. Level 1, Main Entrance"
                       />
                     </View>
 
@@ -495,73 +703,7 @@ export function AdminSetupModal(props) {
                       </View>
                     </View>
 
-                    {/* Compartment Door Size Configurator Header & Summary */}
-                    <View style={styles.doorSizeHeaderCard}>
-                      <View style={styles.doorSizeHeaderTop}>
-                        <View style={styles.doorSizeHeaderTexts}>
-                          <Text style={styles.doorSizeHeaderTitle}>
-                            Set Compartment Door Size Each
-                          </Text>
-                          <Text style={styles.doorSizeHeaderSub}>
-                            Configure physical size (Small, Medium, Large) for each locker door
-                          </Text>
-                        </View>
-                        
-                        {/* Live Counts Breakdown Chips */}
-                        <View style={styles.liveSummaryRow}>
-                          <View style={styles.summaryChipSmall}>
-                            <Text style={styles.summaryChipSmallText}>
-                              {smallDoorCount} Small
-                            </Text>
-                          </View>
-                          <View style={styles.summaryChipMedium}>
-                            <Text style={styles.summaryChipMediumText}>
-                              {mediumDoorCount} Medium
-                            </Text>
-                          </View>
-                          <View style={styles.summaryChipLarge}>
-                            <Text style={styles.summaryChipLargeText}>
-                              {largeDoorCount} Large
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-
-                      {/* Quick Bulk Presets */}
-                      <View style={styles.quickPresetBar}>
-                        <Text style={styles.quickPresetLabel}>Quick Setup:</Text>
-                        <TouchableOpacity
-                          style={styles.quickPresetPill}
-                          onPress={handleSetBalancedDistribution}
-                          activeOpacity={0.75}
-                        >
-                          <Text style={styles.quickPresetPillText}>Balanced Split</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.quickPresetPill}
-                          onPress={() => handleSetAllSizes('small')}
-                          activeOpacity={0.75}
-                        >
-                          <Text style={styles.quickPresetPillText}>All Small</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.quickPresetPill}
-                          onPress={() => handleSetAllSizes('medium')}
-                          activeOpacity={0.75}
-                        >
-                          <Text style={styles.quickPresetPillText}>All Medium</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.quickPresetPill}
-                          onPress={() => handleSetAllSizes('large')}
-                          activeOpacity={0.75}
-                        >
-                          <Text style={styles.quickPresetPillText}>All Large</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    {/* Interactive Compartment Doors Grid */}
+                    {/* Interactive Compartment Doors Grid (Directly under Total Doors) */}
                     <View style={styles.compartmentsGrid}>
                       {Array.from({ length: totalDoors }, (_, i) => i + 1).map((doorNum) => {
                         const currentSize = doorSizes[doorNum] || 'medium';
@@ -661,142 +803,271 @@ export function AdminSetupModal(props) {
                 {/* ----------------------------------------------------- */}
                 {activeTab === 'relays' && (
                   <View style={styles.settingsGroup}>
-                    <Text style={styles.sectionSubtitle}>
-                      Direct RS485 Solenoid Test (Click any door to pop lock)
-                    </Text>
+                    
+                    {/* Technician Test Utility Bar */}
+                    <View style={styles.relayUtilityBar}>
+                      <View style={styles.relayUtilityLeft}>
+                        <Text style={styles.relaySectionTitle}>Door Solenoid Actuation Matrix</Text>
+                        <Text style={styles.relaySectionSub}>
+                          Click any door button below to pop lock or run a sequential cycle test.
+                        </Text>
+                      </View>
 
+                      <View style={styles.relayUtilityRight}>
+                        {isCycleTesting ? (
+                          <TouchableOpacity
+                            style={styles.cycleStopBtn}
+                            onPress={handleStopCycleTest}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.cycleStopBtnText}>Stop Cycle Test</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <TouchableOpacity
+                            style={styles.cycleTestBtn}
+                            onPress={handleSequentialCycleTest}
+                            disabled={testingDoor !== null}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.cycleTestBtnText}>Sequential Cycle Test</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Live Actuation Feedback Banner */}
                     {Boolean(testStatusMessage) && (
                       <View style={styles.statusBanner}>
+                        <View style={styles.statusBannerDot} />
                         <Text style={styles.statusBannerText}>{testStatusMessage}</Text>
                       </View>
                     )}
 
-                    <View style={styles.doorRelayGrid}>
-                      {Array.from({ length: totalDoors }, (_, i) => i + 1).map((doorNum) => (
+                    {/* High-Tech Door Relay Matrix Cards */}
+                    <View style={styles.relayMatrixGrid}>
+                      {Array.from({ length: totalDoors }, (_, i) => i + 1).map((doorNum) => {
+                        const isThisTesting = testingDoor === doorNum;
+                        const doorSize = doorSizes[doorNum] || 'medium';
+                        return (
+                          <View
+                            key={doorNum}
+                            style={[
+                              styles.relayCard,
+                              isThisTesting && styles.relayCardActive,
+                            ]}
+                          >
+                            <View style={styles.relayCardHeader}>
+                              <View style={styles.relayDoorNumBadge}>
+                                <Text style={styles.relayDoorNumText}>
+                                  Door {doorNum < 10 ? `0${doorNum}` : doorNum}
+                                </Text>
+                              </View>
+                              <View
+                                style={[
+                                  styles.activeSizeBadge,
+                                  doorSize === 'small' && styles.activeSizeBadgeSmall,
+                                  doorSize === 'medium' && styles.activeSizeBadgeMedium,
+                                  doorSize === 'large' && styles.activeSizeBadgeLarge,
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.activeSizeBadgeText,
+                                    doorSize === 'small' && styles.activeSizeBadgeTextSmall,
+                                    doorSize === 'medium' && styles.activeSizeBadgeTextMedium,
+                                    doorSize === 'large' && styles.activeSizeBadgeTextLarge,
+                                  ]}
+                                >
+                                  {doorSize.toUpperCase()}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View style={styles.relayCardBody}>
+                              <Text style={styles.relayChannelLabel}>Channel: Relay 0x01-{doorNum}</Text>
+                              <Text style={styles.relayCmdHex}>CMD: 0x8A 0x01 {doorNum < 10 ? `0x0${doorNum}` : `0x${doorNum}`}</Text>
+                            </View>
+
+                            <TouchableOpacity
+                              style={[
+                                styles.popLockBtn,
+                                isThisTesting && styles.popLockBtnActive,
+                              ]}
+                              onPress={() => handleTestDoor(doorNum)}
+                              disabled={testingDoor !== null || isCycleTesting}
+                              activeOpacity={0.8}
+                            >
+                              {isThisTesting ? (
+                                <View style={styles.actuatingRow}>
+                                  <ActivityIndicator size="small" color={COLORS.white} />
+                                  <Text style={styles.popLockBtnTextActive}>Actuating...</Text>
+                                </View>
+                              ) : (
+                                <Text style={styles.popLockBtnText}>Pop Lock</Text>
+                              )}
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                  </View>
+                )}
+
+                {/* ----------------------------------------------------- */}
+                {/* TAB 4: SYSTEM & ERROR LOGS CONSOLE                     */}
+                {/* ----------------------------------------------------- */}
+                {activeTab === 'logs' && (
+                  <View style={styles.settingsGroup}>
+                    
+                    {/* Log Filter and Actions Bar */}
+                    <View style={styles.logsControlBar}>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+                        <View style={styles.filterGroup}>
+                          <TouchableOpacity
+                            style={[styles.filterChip, logFilter === 'ALL' && styles.filterChipActive]}
+                            onPress={() => setLogFilter('ALL')}
+                          >
+                            <Text style={[styles.filterChipText, logFilter === 'ALL' && styles.filterChipTextActive]}>
+                              ALL ({systemLogs.length})
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.filterChip, logFilter === 'ERROR' && styles.filterChipActive]}
+                            onPress={() => setLogFilter('ERROR')}
+                          >
+                            <Text style={[styles.filterChipText, logFilter === 'ERROR' && styles.filterChipTextActive]}>
+                              ERRORS ({errorCount})
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.filterChip, logFilter === 'HARDWARE' && styles.filterChipActive]}
+                            onPress={() => setLogFilter('HARDWARE')}
+                          >
+                            <Text style={[styles.filterChipText, logFilter === 'HARDWARE' && styles.filterChipTextActive]}>
+                              HARDWARE ({hardwareCount})
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.filterChip, logFilter === 'API' && styles.filterChipActive]}
+                            onPress={() => setLogFilter('API')}
+                          >
+                            <Text style={[styles.filterChipText, logFilter === 'API' && styles.filterChipTextActive]}>
+                              API & CLOUD ({apiCount})
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.filterChip, logFilter === 'SYSTEM' && styles.filterChipActive]}
+                            onPress={() => setLogFilter('SYSTEM')}
+                          >
+                            <Text style={[styles.filterChipText, logFilter === 'SYSTEM' && styles.filterChipTextActive]}>
+                              SYSTEM ({systemCount})
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </ScrollView>
+
+                      <View style={styles.logActionsRow}>
                         <TouchableOpacity
-                          key={doorNum}
-                          style={[
-                            styles.doorRelayBtn,
-                            testingDoor === doorNum && styles.doorRelayBtnActive,
-                          ]}
-                          onPress={() => handleTestDoor(doorNum)}
-                          disabled={testingDoor !== null}
-                          activeOpacity={0.8}
+                          style={styles.logActionBtn}
+                          onPress={() => {
+                            LoggerService.addLog(
+                              'ERROR',
+                              'SERIAL_RS485',
+                              'Hardware exception: Solenoid Relay #04 feedback timeout on /dev/ttyS3 (Simulated Error for Technician Verification)'
+                            );
+                          }}
+                          activeOpacity={0.75}
                         >
-                          {testingDoor === doorNum ? (
-                            <ActivityIndicator size="small" color={COLORS.white} />
-                          ) : (
-                            <>
-                              <Text style={[
-                                styles.doorRelayNum,
-                                testingDoor === doorNum && styles.doorRelayNumActive
-                              ]}>
-                                {doorNum < 10 ? `0${doorNum}` : doorNum}
-                              </Text>
-                              <Text style={styles.doorRelayLabel}>Pop Lock</Text>
-                            </>
-                          )}
+                          <Text style={styles.logActionBtnText}>Simulate Test Error</Text>
                         </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                )}
 
-                {/* ----------------------------------------------------- */}
-                {/* TAB 4: HARDWARE & SERIAL                              */}
-                {/* ----------------------------------------------------- */}
-                {activeTab === 'hardware' && (
-                  <View style={styles.settingsGroup}>
-                    <View style={styles.twoColRow}>
-                      <View style={styles.colHalf}>
-                        <Text style={styles.fieldLabel}>Serial Port Path</Text>
-                        <TextInput
-                          style={styles.readOnlyInput}
-                          value="/dev/ttyS3"
-                          editable={false}
-                        />
-                      </View>
-                      <View style={styles.colHalf}>
-                        <Text style={styles.fieldLabel}>Baud Rate</Text>
-                        <TextInput
-                          style={styles.readOnlyInput}
-                          value="9600 bps"
-                          editable={false}
-                        />
+                        <TouchableOpacity
+                          style={styles.logActionBtn}
+                          onPress={() => LoggerService.clearLogs()}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={styles.logActionBtnText}>Clear Buffer</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.logActionBtn}
+                          onPress={() => LoggerService.resetToDefaults()}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={styles.logActionBtnText}>Reset Defaults</Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
 
-                    <View style={styles.twoColRow}>
-                      <View style={styles.colHalf}>
-                        <Text style={styles.fieldLabel}>Lock Board ID</Text>
-                        <TextInput
-                          style={styles.readOnlyInput}
-                          value="1 (0x01)"
-                          editable={false}
-                        />
-                      </View>
-                      <View style={styles.colHalf}>
-                        <Text style={styles.fieldLabel}>Board Protocol Type</Text>
-                        <TextInput
-                          style={styles.readOnlyInput}
-                          value="ATAT (Standard)"
-                          editable={false}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.toggleRow}>
-                      <View style={styles.toggleTextCol}>
-                        <Text style={styles.toggleTitle}>Demo / Offline Fallback</Text>
-                        <Text style={styles.toggleSub}>
-                          Simulate successful unlock when running on desktop or emulator without physical RS485.
+                    {/* Dark High-Contrast Terminal / Console Window */}
+                    <View style={styles.terminalContainer}>
+                      {/* Terminal Header */}
+                      <View style={styles.terminalHeader}>
+                        <View style={styles.terminalDotsRow}>
+                          <View style={[styles.terminalDot, { backgroundColor: '#ef4444' }]} />
+                          <View style={[styles.terminalDot, { backgroundColor: '#f59e0b' }]} />
+                          <View style={[styles.terminalDot, { backgroundColor: '#10b981' }]} />
+                        </View>
+                        <Text style={styles.terminalTitle}>
+                          KIOSK TELEMETRY CONSOLE • /dev/ttyS3 & render-api
                         </Text>
-                      </View>
-                      <Switch
-                        value={simulationFallback}
-                        onValueChange={setSimulationFallback}
-                        trackColor={{ false: COLORS.slate300, true: COLORS.orange }}
-                        thumbColor={COLORS.white}
-                      />
-                    </View>
-                  </View>
-                )}
-
-                {/* ----------------------------------------------------- */}
-                {/* TAB 5: NETWORK & CLOUD                                */}
-                {/* ----------------------------------------------------- */}
-                {activeTab === 'network' && (
-                  <View style={styles.settingsGroup}>
-                    <View style={styles.fieldBlock}>
-                      <Text style={styles.fieldLabel}>Cloud API Base URL</Text>
-                      <TextInput
-                        style={styles.readOnlyInput}
-                        value="https://smart-laundry-locker-api.onrender.com/api"
-                        editable={false}
-                      />
-                    </View>
-
-                    <View style={styles.pingCard}>
-                      <View style={styles.pingStatusRow}>
-                        <View style={styles.statusDotLive} />
-                        <Text style={styles.pingStatusText}>
-                          {pingStatus || 'Render Cloud API & PostgreSQL Ready'}
-                        </Text>
+                        <View style={styles.terminalStatusBadge}>
+                          <Text style={styles.terminalStatusText}>
+                            LIVE BUFFER • {filteredLogs.length} EVENTS
+                          </Text>
+                        </View>
                       </View>
 
-                      <TouchableOpacity
-                        style={styles.pingBtn}
-                        onPress={handlePingApi}
-                        disabled={isPinging}
-                        activeOpacity={0.8}
-                      >
-                        {isPinging ? (
-                          <ActivityIndicator size="small" color={COLORS.orange} />
+                      {/* Log Stream */}
+                      <ScrollView style={styles.terminalStream} nestedScrollEnabled={true}>
+                        {filteredLogs.length === 0 ? (
+                          <View style={styles.emptyLogsView}>
+                            <Text style={styles.emptyLogsText}>
+                              No telemetry or error logs match the selected filter.
+                            </Text>
+                          </View>
                         ) : (
-                          <Text style={styles.pingBtnText}>Test API Connectivity</Text>
+                          filteredLogs.map((entry) => (
+                            <View key={entry.id} style={styles.logRow}>
+                              <Text style={styles.logTimestamp}>{entry.timestamp}</Text>
+                              
+                              <View
+                                style={[
+                                  styles.levelBadge,
+                                  entry.level === 'ERROR' && styles.levelBadgeError,
+                                  entry.level === 'WARN' && styles.levelBadgeWarn,
+                                  entry.level === 'HARDWARE' && styles.levelBadgeHardware,
+                                  entry.level === 'INFO' && styles.levelBadgeInfo,
+                                  entry.level === 'SUCCESS' && styles.levelBadgeSuccess,
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.levelBadgeText,
+                                    entry.level === 'ERROR' && styles.levelBadgeTextError,
+                                    entry.level === 'WARN' && styles.levelBadgeTextWarn,
+                                    entry.level === 'HARDWARE' && styles.levelBadgeTextHardware,
+                                    entry.level === 'INFO' && styles.levelBadgeTextInfo,
+                                    entry.level === 'SUCCESS' && styles.levelBadgeTextSuccess,
+                                  ]}
+                                >
+                                  {entry.level}
+                                </Text>
+                              </View>
+
+                              <Text style={styles.logComponent}>[{entry.component}]</Text>
+                              <Text style={styles.logMessage}>{entry.message}</Text>
+                            </View>
+                          ))
                         )}
-                      </TouchableOpacity>
+                      </ScrollView>
                     </View>
+
                   </View>
                 )}
 
@@ -805,7 +1076,7 @@ export function AdminSetupModal(props) {
           )}
 
           {/* ========================================================= */}
-          {/* BOTTOM BAR: PRIMARY ACTION BUTTON (SAFETY ORANGE)         */}
+          {/* BOTTOM BAR: PRIMARY ACTION BUTTON                         */}
           {/* ========================================================= */}
           {viewState === 'SETUP' && (
             <View style={styles.bottomBar}>
@@ -826,9 +1097,13 @@ export function AdminSetupModal(props) {
                       Saving to PostgreSQL Database...
                     </Text>
                   </View>
+                ) : isSavedFeedback ? (
+                  <Text style={styles.primarySubmitBtnText}>
+                    {saveStatusText || 'Configuration Saved Successfully'}
+                  </Text>
                 ) : (
                   <Text style={styles.primarySubmitBtnText}>
-                    {saveStatusText || (isSavedFeedback ? 'Saved to Database & Locker!' : 'Save & Apply Locker Settings')}
+                    Save & Apply Locker Settings
                   </Text>
                 )}
               </TouchableOpacity>
@@ -844,143 +1119,302 @@ export function AdminSetupModal(props) {
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    padding: 24,
   },
   card: {
     width: '100%',
-    maxWidth: 780,
-    height: 610,
+    maxWidth: 920,
+    height: 640,
     backgroundColor: COLORS.white,
     borderRadius: 20,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.2,
-    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 25,
     elevation: 20,
     flexDirection: 'column',
   },
   topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 22,
-    paddingVertical: 14,
+    height: 64,
+    paddingHorizontal: 24,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.slate100,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.white,
   },
   titleGroup: {
     gap: 2,
   },
   topBarTitle: {
     fontFamily: FONT_FAMILY,
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '900',
     color: COLORS.slate900,
     letterSpacing: -0.3,
   },
   topBarSub: {
     fontFamily: FONT_FAMILY,
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
     color: COLORS.slate500,
-    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: COLORS.slate100,
     alignItems: 'center',
     justifyContent: 'center',
   },
   closeBtnText: {
     fontFamily: FONT_FAMILY,
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.slate500,
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.slate600,
   },
-  authContainer: {
+  authSplitLayout: {
     flex: 1,
+    flexDirection: 'row',
+  },
+  authInfoCol: {
+    width: 320,
+    backgroundColor: '#090d16',
+    borderRightWidth: 1,
+    borderRightColor: '#1e293b',
+    padding: 24,
+    justifyContent: 'space-between',
+  },
+  securityBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 36,
+    gap: 6,
+    backgroundColor: 'rgba(234, 88, 12, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(234, 88, 12, 0.35)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
   },
-  lockIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: COLORS.orangeSubtle,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+  securityPulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.orange,
   },
-  lockIconText: {
-    fontSize: 28,
-  },
-  authTitle: {
+  securityBadgeText: {
     fontFamily: FONT_FAMILY,
-    fontSize: 22,
+    fontSize: 10,
     fontWeight: '800',
+    color: COLORS.orange,
+    letterSpacing: 0.8,
+  },
+  authTitleGroup: {
+    marginVertical: 12,
+    gap: 4,
+  },
+  authMainTitle: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 20,
+    fontWeight: '900',
+    color: COLORS.white,
+    letterSpacing: -0.3,
+  },
+  authMainSub: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    color: '#94a3b8',
+    lineHeight: 17,
+  },
+  authTelemetryBox: {
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    padding: 14,
+    gap: 10,
+    marginVertical: 12,
+  },
+  telemetryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  telemetryLabel: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748b',
+    letterSpacing: 0.5,
+  },
+  telemetryValue: {
+    fontFamily: MONO_FONT,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#f8fafc',
+  },
+  authNoticeCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    padding: 10,
+    borderRadius: 8,
+  },
+  authNoticeText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 10,
+    color: '#64748b',
+    lineHeight: 14,
+  },
+  authNumpadCol: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 28,
+    paddingVertical: 16,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  numpadHeader: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  numpadTitle: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 17,
+    fontWeight: '900',
     color: COLORS.slate900,
-    marginBottom: 8,
+    letterSpacing: -0.2,
   },
-  authSub: {
+  numpadSub: {
     fontFamily: FONT_FAMILY,
-    fontSize: 13,
+    fontSize: 11,
     color: COLORS.slate500,
-    textAlign: 'center',
-    maxWidth: 420,
-    lineHeight: 18,
-    marginBottom: 20,
   },
-  pinInput: {
+  authAlertBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginTop: 4,
+  },
+  authAlertDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#ef4444',
+  },
+  authAlertText: {
     fontFamily: FONT_FAMILY,
-    width: '100%',
-    maxWidth: 320,
-    height: 52,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#b91c1c',
+  },
+  pinSlotsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginVertical: 10,
+  },
+  pinSlot: {
+    width: 40,
+    height: 44,
+    borderRadius: 10,
     backgroundColor: COLORS.slate50,
     borderWidth: 1.5,
     borderColor: COLORS.slate200,
-    borderRadius: 12,
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.slate900,
-    textAlign: 'center',
-    letterSpacing: 4,
-    marginBottom: 12,
-  },
-  authErrorText: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#ef4444',
-    marginBottom: 12,
-  },
-  authSubmitBtn: {
-    width: '100%',
-    maxWidth: 320,
-    height: 48,
-    backgroundColor: COLORS.orange,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  pinSlotFilled: {
+    backgroundColor: COLORS.white,
+    borderColor: COLORS.orange,
+  },
+  pinSlotActive: {
+    borderColor: COLORS.orange,
+    backgroundColor: COLORS.orangeSubtle,
+  },
+  pinDotMasked: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: COLORS.orange,
+  },
+  touchKeypadGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: 252,
+    gap: 8,
+    justifyContent: 'center',
+  },
+  keypadBtn: {
+    width: 76,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: COLORS.slate50,
+    borderWidth: 1,
+    borderColor: COLORS.slate200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keypadActionBtn: {
+    backgroundColor: COLORS.slate100,
+  },
+  keypadDigitText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.slate900,
+  },
+  keypadClearText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.slate600,
+    letterSpacing: 0.5,
+  },
+  keypadBackText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.slate600,
+  },
+  authSubmitBtn: {
+    width: 252,
+    height: 44,
+    backgroundColor: COLORS.orange,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  authSubmitBtnDisabled: {
+    backgroundColor: COLORS.slate300,
+  },
   authSubmitBtnText: {
     fontFamily: FONT_FAMILY,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: COLORS.white,
+    letterSpacing: 0.3,
   },
   mainContainer: {
     flex: 1,
     flexDirection: 'row',
   },
   leftNavbar: {
-    width: 210,
+    width: 220,
     backgroundColor: COLORS.white,
     borderRightWidth: 1,
     borderRightColor: COLORS.slate100,
@@ -1001,22 +1435,39 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     borderLeftColor: COLORS.orange,
   },
+  navItemWithBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   navItemText: {
     fontFamily: FONT_FAMILY,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.slate600,
   },
   navItemTextActive: {
-    fontWeight: '800',
     color: COLORS.orange,
+    fontWeight: '800',
+  },
+  navErrorBadge: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+  },
+  navErrorBadgeText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.white,
   },
   sessionCard: {
-    padding: 10,
+    padding: 12,
     backgroundColor: COLORS.slate50,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: COLORS.slate200,
+    borderColor: COLORS.slate100,
   },
   sessionTitle: {
     fontFamily: FONT_FAMILY,
@@ -1034,23 +1485,21 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 24,
     paddingVertical: 18,
+    backgroundColor: COLORS.white,
   },
   panelHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 16,
   },
   panelTitle: {
     fontFamily: FONT_FAMILY,
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '900',
     color: COLORS.slate900,
     letterSpacing: -0.2,
   },
   settingsGroup: {
     gap: 16,
-    paddingBottom: 20,
+    paddingBottom: 24,
   },
   fieldBlock: {
     gap: 6,
@@ -1060,41 +1509,43 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  labelHintText: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 11,
-    color: COLORS.slate400,
-  },
   fieldLabel: {
     fontFamily: FONT_FAMILY,
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.slate700,
   },
+  labelHintText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 11,
+    color: COLORS.slate400,
+  },
   idInputGroup: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.slate300,
-    borderRadius: 10,
-    overflow: 'hidden',
-    height: 44,
+    gap: 8,
   },
   idInputField: {
-    flex: 1,
     fontFamily: FONT_FAMILY,
-    height: '100%',
+    flex: 1,
+    height: 46,
+    backgroundColor: COLORS.white,
+    borderWidth: 1.5,
+    borderColor: COLORS.slate900,
+    borderRadius: 10,
     paddingHorizontal: 14,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: COLORS.slate900,
-    letterSpacing: 0.5,
+  },
+  idInputFieldDisabled: {
+    backgroundColor: '#f1f5f9',
+    color: '#334155',
+    borderColor: '#cbd5e1',
   },
   idGenerateBtn: {
-    height: '100%',
-    paddingHorizontal: 18,
     backgroundColor: COLORS.orange,
+    paddingHorizontal: 16,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1103,188 +1554,44 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: COLORS.white,
-    letterSpacing: 0.2,
   },
   textInput: {
     fontFamily: FONT_FAMILY,
-    height: 44,
+    height: 46,
     backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.slate300,
+    borderWidth: 1.5,
+    borderColor: COLORS.slate200,
     borderRadius: 10,
     paddingHorizontal: 14,
     fontSize: 13,
     fontWeight: '600',
     color: COLORS.slate900,
   },
-  textInputBold: {
-    fontFamily: FONT_FAMILY,
-    height: 44,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.slate300,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.slate900,
-    letterSpacing: 0.5,
-  },
-  readOnlyInput: {
-    fontFamily: FONT_FAMILY,
-    height: 44,
-    backgroundColor: COLORS.slate50,
-    borderWidth: 1,
-    borderColor: COLORS.slate200,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.slate600,
-  },
-  toggleRow: {
+  doorCountRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: COLORS.slate50,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.slate200,
-    marginTop: 4,
-  },
-  toggleTextCol: {
-    flex: 1,
-    paddingRight: 16,
-  },
-  toggleTitle: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.slate900,
-  },
-  toggleSub: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 11,
-    color: COLORS.slate500,
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  sectionSubtitle: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.slate500,
-    marginBottom: 4,
-  },
-  doorSizeHeaderCard: {
-    backgroundColor: COLORS.slate50,
-    borderWidth: 1,
-    borderColor: COLORS.slate200,
-    borderRadius: 14,
-    padding: 14,
-    gap: 12,
-  },
-  doorSizeHeaderTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     flexWrap: 'wrap',
     gap: 8,
   },
-  doorSizeHeaderTexts: {
-    flex: 1,
-    minWidth: 200,
-  },
-  doorSizeHeaderTitle: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 13,
-    fontWeight: '800',
-    color: COLORS.slate900,
-  },
-  doorSizeHeaderSub: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 11,
-    color: COLORS.slate500,
-    marginTop: 2,
-  },
-  liveSummaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-  },
-  summaryChipSmall: {
-    backgroundColor: '#eff6ff',
+  doorCountPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: COLORS.slate50,
     borderWidth: 1,
-    borderColor: '#bfdbfe',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    borderColor: COLORS.slate200,
   },
-  summaryChipSmallText: {
+  doorCountPillActive: {
+    backgroundColor: COLORS.orange,
+    borderColor: COLORS.orange,
+  },
+  doorCountPillText: {
     fontFamily: FONT_FAMILY,
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#1d4ed8',
-  },
-  summaryChipMedium: {
-    backgroundColor: COLORS.orangeSubtle,
-    borderWidth: 1,
-    borderColor: '#fed7aa',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  summaryChipMediumText: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 10,
-    fontWeight: '800',
-    color: COLORS.orange,
-  },
-  summaryChipLarge: {
-    backgroundColor: '#faf5ff',
-    borderWidth: 1,
-    borderColor: '#e9d5ff',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  summaryChipLargeText: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#7e22ce',
-  },
-  quickPresetBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
-    borderTopWidth: 1,
-    borderTopColor: COLORS.slate200,
-    paddingTop: 10,
-  },
-  quickPresetLabel: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: COLORS.slate500,
-    marginRight: 2,
+    color: COLORS.slate600,
   },
-  quickPresetPill: {
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.slate300,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  quickPresetPillText: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.slate700,
+  doorCountPillTextActive: {
+    color: COLORS.white,
   },
   compartmentsGrid: {
     flexDirection: 'row',
@@ -1375,129 +1682,345 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '800',
   },
-  doorCountRow: {
+  // Relay Utility Bar
+  relayUtilityBar: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  doorCountPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: COLORS.slate50,
-    borderWidth: 1,
-    borderColor: COLORS.slate200,
-  },
-  doorCountPillActive: {
-    backgroundColor: COLORS.orange,
-    borderColor: COLORS.orange,
-  },
-  doorCountPillText: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.slate600,
-  },
-  doorCountPillTextActive: {
-    color: COLORS.white,
-  },
-  doorRelayGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginTop: 8,
-  },
-  doorRelayBtn: {
-    width: 72,
-    height: 64,
-    borderRadius: 10,
-    backgroundColor: COLORS.white,
-    borderWidth: 1.5,
-    borderColor: COLORS.slate300,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 4,
   },
-  doorRelayBtnActive: {
-    backgroundColor: COLORS.orange,
-    borderColor: COLORS.orange,
+  relayUtilityLeft: {
+    flex: 1,
   },
-  doorRelayNum: {
+  relaySectionTitle: {
     fontFamily: FONT_FAMILY,
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '800',
     color: COLORS.slate900,
   },
-  doorRelayNumActive: {
+  relaySectionSub: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 11,
+    color: COLORS.slate500,
+    marginTop: 1,
+  },
+  relayUtilityRight: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  cycleTestBtn: {
+    backgroundColor: COLORS.white,
+    borderWidth: 1.5,
+    borderColor: COLORS.orange,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  cycleTestBtnText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.orange,
+  },
+  cycleStopBtn: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  cycleStopBtnText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 11,
+    fontWeight: '800',
     color: COLORS.white,
   },
-  doorRelayLabel: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 9,
-    fontWeight: '700',
-    color: COLORS.slate500,
-    marginTop: 2,
-  },
   statusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     backgroundColor: COLORS.emeraldSubtle,
     borderWidth: 1,
     borderColor: COLORS.emeraldBorder,
     padding: 10,
     borderRadius: 10,
-    marginBottom: 8,
+  },
+  statusBannerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.emerald,
   },
   statusBannerText: {
     fontFamily: FONT_FAMILY,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: COLORS.emeraldDark,
   },
-  twoColRow: {
+  // Relay Matrix Grid
+  relayMatrixGrid: {
     flexDirection: 'row',
-    gap: 12,
-  },
-  colHalf: {
-    flex: 1,
-    gap: 6,
-  },
-  pingCard: {
-    backgroundColor: COLORS.slate50,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: COLORS.slate200,
+    flexWrap: 'wrap',
     gap: 10,
   },
-  pingStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  relayCard: {
+    flexBasis: '31%',
+    flexGrow: 1,
+    minWidth: 160,
+    backgroundColor: COLORS.white,
+    borderWidth: 1.5,
+    borderColor: COLORS.slate200,
+    borderRadius: 12,
+    padding: 10,
     gap: 8,
   },
-  statusDotLive: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.emerald,
+  relayCardActive: {
+    borderColor: COLORS.orange,
+    backgroundColor: COLORS.orangeSubtle,
   },
-  pingStatusText: {
+  relayCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  relayDoorNumBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: COLORS.slate100,
+  },
+  relayDoorNumText: {
     fontFamily: FONT_FAMILY,
     fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.slate700,
+    fontWeight: '800',
+    color: COLORS.slate900,
   },
-  pingBtn: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+  relayCardBody: {
+    gap: 2,
+  },
+  relayChannelLabel: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 10,
+    fontWeight: '600',
+    color: COLORS.slate600,
+  },
+  relayCmdHex: {
+    fontFamily: MONO_FONT,
+    fontSize: 9,
+    color: COLORS.slate400,
+  },
+  popLockBtn: {
+    height: 34,
     backgroundColor: COLORS.white,
+    borderWidth: 1.5,
+    borderColor: COLORS.orange,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  popLockBtnActive: {
+    backgroundColor: COLORS.orange,
+    borderColor: COLORS.orange,
+  },
+  actuatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  popLockBtnText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.orange,
+  },
+  popLockBtnTextActive: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
+  // Logs Control Bar
+  logsControlBar: {
+    gap: 10,
+  },
+  filterScroll: {
+    flexGrow: 0,
+  },
+  filterGroup: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  filterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: COLORS.slate100,
+    borderWidth: 1,
+    borderColor: COLORS.slate200,
+  },
+  filterChipActive: {
+    backgroundColor: COLORS.orange,
+    borderColor: COLORS.orange,
+  },
+  filterChipText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.slate600,
+  },
+  filterChipTextActive: {
+    color: COLORS.white,
+  },
+  logActionsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  logActionBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: COLORS.slate50,
     borderWidth: 1,
     borderColor: COLORS.slate300,
   },
-  pingBtnText: {
+  logActionBtnText: {
     fontFamily: FONT_FAMILY,
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '700',
-    color: COLORS.orange,
+    color: COLORS.slate700,
+  },
+  // Terminal Container
+  terminalContainer: {
+    backgroundColor: '#090d16',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    overflow: 'hidden',
+    height: 340,
+    flexDirection: 'column',
+  },
+  terminalHeader: {
+    height: 34,
+    backgroundColor: '#0f172a',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  terminalDotsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  terminalDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  terminalTitle: {
+    fontFamily: MONO_FONT,
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94a3b8',
+  },
+  terminalStatusBadge: {
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  terminalStatusText: {
+    fontFamily: MONO_FONT,
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#38bdf8',
+  },
+  terminalStream: {
+    flex: 1,
+    padding: 12,
+  },
+  emptyLogsView: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyLogsText: {
+    fontFamily: MONO_FONT,
+    fontSize: 11,
+    color: '#64748b',
+  },
+  logRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  logTimestamp: {
+    fontFamily: MONO_FONT,
+    fontSize: 10,
+    color: '#64748b',
+    width: 140,
+  },
+  levelBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  levelBadgeError: {
+    backgroundColor: '#450a0a',
+    borderColor: '#991b1b',
+  },
+  levelBadgeWarn: {
+    backgroundColor: '#451a03',
+    borderColor: '#92400e',
+  },
+  levelBadgeHardware: {
+    backgroundColor: '#431407',
+    borderColor: '#9a3412',
+  },
+  levelBadgeInfo: {
+    backgroundColor: '#082f49',
+    borderColor: '#0369a1',
+  },
+  levelBadgeSuccess: {
+    backgroundColor: '#022c22',
+    borderColor: '#065f46',
+  },
+  levelBadgeText: {
+    fontFamily: MONO_FONT,
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  levelBadgeTextError: {
+    color: '#f87171',
+  },
+  levelBadgeTextWarn: {
+    color: '#fbbf24',
+  },
+  levelBadgeTextHardware: {
+    color: '#fb923c',
+  },
+  levelBadgeTextInfo: {
+    color: '#38bdf8',
+  },
+  levelBadgeTextSuccess: {
+    color: '#34d399',
+  },
+  logComponent: {
+    fontFamily: MONO_FONT,
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94a3b8',
+  },
+  logMessage: {
+    fontFamily: MONO_FONT,
+    fontSize: 10,
+    color: '#f1f5f9',
+    flex: 1,
+    lineHeight: 14,
   },
   bottomBar: {
     paddingHorizontal: 22,

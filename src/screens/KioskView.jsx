@@ -23,8 +23,8 @@ import { ENV } from '../config/env';
 export function KioskView() {
   // Dynamic Station Profile (persisted across reboots via SharedPreferences/localStorage)
   const [machineConfig, setMachineConfig] = useState({
-    stationId: ENV.stationId || 'CMH-01',
-    stationName: ENV.stationName || 'Central Mall Depot',
+    stationId: ENV.stationId || 'SETUP REQUIRED',
+    stationName: ENV.stationName || 'Unprovisioned Locker Station',
     totalDoors: 16,
   });
 
