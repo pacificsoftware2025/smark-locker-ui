@@ -142,3 +142,152 @@ export async function syncStationSettings({ stationId, stationName, locationTag,
     compartments: compartments,
   };
 }
+
+// ==============================================================================
+// LAUNDRY LOCKER BINDING & PAIRING HANDSHAKE METHODS
+// ==============================================================================
+
+// 1. Operator requests remote pairing from web dashboard to physical kiosk
+export async function requestStationPairing({ stationId, stationName, address, branchTag }) {
+  if (!stationId) {
+    throw new Error('Machine stationId is required for binding request.');
+  }
+
+  const normStationId = String(stationId).trim().toUpperCase();
+  const displayName = String(stationName || `Station ${normStationId}`).trim();
+  const displayAddress = String(address || branchTag || 'Provisioned Branch Location').trim();
+
+  // Generate 6-digit pairing verification code
+  const pairingCode = String(Math.floor(100000 + Math.random() * 900000));
+
+  const sql = `
+    INSERT INTO locker_stations (
+      id, name, address, total_compartments, status, binding_status, pairing_code, pairing_requested_at, created_at, updated_at
+    )
+    VALUES ($1, $2, $3, 16, 'online', 'PENDING_CONFIRMATION', $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT (id) DO UPDATE SET
+      name = EXCLUDED.name,
+      address = EXCLUDED.address,
+      binding_status = 'PENDING_CONFIRMATION',
+      pairing_code = EXCLUDED.pairing_code,
+      pairing_requested_at = CURRENT_TIMESTAMP,
+      updated_at = CURRENT_TIMESTAMP
+    RETURNING *;
+  `;
+
+  try {
+    const res = await query(sql, [normStationId, displayName, displayAddress, pairingCode]);
+    if (res.rows && res.rows[0]) {
+      return res.rows[0];
+    }
+  } catch (err) {
+    console.warn('[LockerService] requestStationPairing DB error:', err.message);
+    throw err;
+  }
+
+  return {
+    id: normStationId,
+    name: displayName,
+    address: displayAddress,
+    binding_status: 'PENDING_CONFIRMATION',
+    pairing_code: pairingCode,
+    pairing_requested_at: new Date().toISOString(),
+  };
+}
+
+// 2. Kiosk checks pairing status (polled by kiosk in SETUP REQUIRED state)
+export async function getStationPairingStatus(stationId) {
+  if (!stationId) {
+    throw new Error('Station ID is required to query pairing status.');
+  }
+  const normStationId = String(stationId).trim().toUpperCase();
+
+  try {
+    const sql = `
+      SELECT id, name, address, total_compartments, status, binding_status, pairing_code, pairing_requested_at, updated_at
+      FROM locker_stations
+      WHERE id = $1;
+    `;
+    const res = await query(sql, [normStationId]);
+    if (res.rows && res.rows.length > 0) {
+      return res.rows[0];
+    }
+  } catch (err) {
+    console.warn('[LockerService] getStationPairingStatus DB error:', err.message);
+  }
+
+  return {
+    id: normStationId,
+    binding_status: 'UNBOUND',
+    pairing_code: null,
+    pairing_requested_at: null,
+  };
+}
+
+// 3. Kiosk technician approves pairing on touchscreen
+export async function confirmStationPairing(stationId, pairingCode) {
+  if (!stationId) {
+    throw new Error('Station ID is required to confirm pairing.');
+  }
+  const normStationId = String(stationId).trim().toUpperCase();
+
+  try {
+    const sql = `
+      UPDATE locker_stations
+      SET 
+        binding_status = 'BOUND_ACTIVE',
+        pairing_code = NULL,
+        status = 'online',
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING *;
+    `;
+    const res = await query(sql, [normStationId]);
+
+    // Ensure 16 compartments exist for the newly bound station
+    for (let i = 1; i <= 16; i++) {
+      const boxNum = i < 10 ? `0${i}` : `${i}`;
+      let size = 'medium';
+      if (i <= 4) size = 'small';
+      else if (i > 12) size = 'large';
+
+      const compSql = `
+        INSERT INTO locker_compartments (station_id, box_number, size, status, updated_at)
+        VALUES ($1, $2, $3, 'available', CURRENT_TIMESTAMP)
+        ON CONFLICT (station_id, box_number) DO NOTHING;
+      `;
+      await query(compSql, [normStationId, boxNum, size]);
+    }
+
+    if (res.rows && res.rows[0]) {
+      return res.rows[0];
+    }
+  } catch (err) {
+    console.warn('[LockerService] confirmStationPairing DB error:', err.message);
+    throw err;
+  }
+
+  return {
+    id: normStationId,
+    binding_status: 'BOUND_ACTIVE',
+    status: 'online',
+  };
+}
+
+// 4. Returns all registered fleet locker stations for Operator views
+export async function getAllLockerStations() {
+  try {
+    const sql = `
+      SELECT id, name, address, total_compartments, status, binding_status, pairing_code, pairing_requested_at, created_at, updated_at
+      FROM locker_stations
+      ORDER BY updated_at DESC;
+    `;
+    const res = await query(sql, []);
+    if (res.rows) {
+      return res.rows;
+    }
+  } catch (err) {
+    console.warn('[LockerService] getAllLockerStations DB error:', err.message);
+  }
+  return [];
+}

@@ -2,6 +2,22 @@ import { getNativeMachineConfig, saveNativeMachineConfig } from '../native/Locke
 import { ENV } from '../config/env';
 
 const STORAGE_KEY = 'SMART_LOCKER_STATION_CONFIG';
+const TERMINAL_HARDWARE_ID_KEY = 'SMART_LOCKER_TERMINAL_HARDWARE_ID';
+
+/**
+ * Returns or generates a persistent hardware terminal ID (e.g. SLL-12901) for this kiosk.
+ */
+export function getTerminalHardwareId() {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    let existing = window.localStorage.getItem(TERMINAL_HARDWARE_ID_KEY);
+    if (!existing) {
+      existing = `SLL-${Math.floor(10000 + Math.random() * 90000)}`;
+      window.localStorage.setItem(TERMINAL_HARDWARE_ID_KEY, existing);
+    }
+    return existing;
+  }
+  return 'SLL-12901';
+}
 
 /**
  * Universal Storage Helper for Kiosk Machine Identity:
@@ -56,8 +72,10 @@ export async function loadMachineConfig() {
   }
 
   // 3. Fallback to .env defaults
+  const hardwareId = getTerminalHardwareId();
   return {
     stationId: ENV.stationId || 'SETUP REQUIRED',
+    hardwareId: hardwareId,
     stationName: ENV.stationName || 'Unprovisioned Locker Station',
     totalDoors: 16,
     locationTag: 'Level 1, Main Entrance',

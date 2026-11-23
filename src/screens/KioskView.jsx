@@ -7,9 +7,10 @@ import { DoorOpenScreen } from './DoorOpenScreen';
 import { PickupScreen } from './PickupScreen';
 import { PickupPaymentModal } from './PickupPaymentModal';
 import { AdminSetupModal } from './AdminSetupModal';
+import { IncomingPairingModal } from './IncomingPairingModal';
 import { openLockerDoor } from '../native/LockerBridge';
-import { submitDropoffOrder, fetchStationAvailability } from '../services/api';
-import { loadMachineConfig } from '../services/storage';
+import { submitDropoffOrder, fetchStationAvailability, pollPairingStatus, confirmPairingHandshake } from '../services/api';
+import { loadMachineConfig, saveMachineConfig, getTerminalHardwareId } from '../services/storage';
 import { COLORS } from '../theme/colors';
 import { ENV } from '../config/env';
 
@@ -26,12 +27,17 @@ export function KioskView() {
     stationId: ENV.stationId || 'SETUP REQUIRED',
     stationName: ENV.stationName || 'Unprovisioned Locker Station',
     totalDoors: 16,
+    hardwareId: getTerminalHardwareId(),
   });
 
   const stationId = machineConfig.stationId;
 
   // Admin Fleet Setup Modal state
   const [isAdminModalVisible, setIsAdminModalVisible] = useState(false);
+
+  // Incoming Remote Hardware Pairing Handshake state
+  const [incomingPairingRequest, setIncomingPairingRequest] = useState(null);
+  const [isApprovingPairing, setIsApprovingPairing] = useState(false);
 
   // Load persisted machine profile on boot
   useEffect(function () {
@@ -41,6 +47,72 @@ export function KioskView() {
       }
     });
   }, []);
+
+  // Background polling for remote pairing handshake when in unprovisioned state
+  useEffect(function () {
+    const isUnprovisioned = !machineConfig.stationId || machineConfig.stationId === 'SETUP REQUIRED';
+    if (!isUnprovisioned) return;
+
+    const queryTerminalId = machineConfig.hardwareId || getTerminalHardwareId();
+
+    const interval = setInterval(async function () {
+      try {
+        const res = await pollPairingStatus(queryTerminalId);
+        if (res && res.success && res.bindingStatus === 'PENDING_CONFIRMATION') {
+          setIncomingPairingRequest({
+            stationId: queryTerminalId,
+            stationName: res.stationName || `Station ${queryTerminalId}`,
+            address: res.address || 'Assigned Branch Location',
+            pairingCode: res.pairingCode || '849201',
+          });
+        }
+      } catch (err) {
+        // Quiet fail on network hiccups
+      }
+    }, 3500);
+
+    return function () {
+      clearInterval(interval);
+    };
+  }, [machineConfig.stationId, machineConfig.hardwareId]);
+
+  async function handleApprovePairing() {
+    if (!incomingPairingRequest || isApprovingPairing) return;
+    setIsApprovingPairing(true);
+
+    try {
+      await confirmPairingHandshake(
+        incomingPairingRequest.stationId,
+        incomingPairingRequest.pairingCode
+      );
+
+      const newConfig = {
+        stationId: incomingPairingRequest.stationId,
+        hardwareId: incomingPairingRequest.stationId,
+        stationName: incomingPairingRequest.stationName,
+        totalDoors: 16,
+        locationTag: incomingPairingRequest.address,
+        doorSizes: null,
+      };
+
+      await saveMachineConfig(newConfig);
+      setMachineConfig(newConfig);
+      setIncomingPairingRequest(null);
+      Alert.alert(
+        'Station Provisioned Successfully',
+        `This locker kiosk is now paired and active as ${newConfig.stationId} (${newConfig.stationName}). Customer drop-off is now unlocked.`,
+        [{ text: 'OK' }]
+      );
+    } catch (err) {
+      Alert.alert('Pairing Error', err.message || 'Could not confirm pairing handshake.');
+    } finally {
+      setIsApprovingPairing(false);
+    }
+  }
+
+  function handleDeclinePairing() {
+    setIncomingPairingRequest(null);
+  }
 
   // Current screen state
   // In Vanilla JS: let currentStep = 'HOME';
@@ -243,6 +315,7 @@ export function KioskView() {
         {currentStep === 'HOME' && (
           <HomeScreen
             stationId={stationId}
+            hardwareId={machineConfig.hardwareId || getTerminalHardwareId()}
             isStationFull={stationAvailability.isStationFull}
             onStartDropoff={handleStartDropoff}
             onStartPickup={handleStartPickup}
@@ -314,6 +387,15 @@ export function KioskView() {
             setMachineConfig(cfg);
           }}
           onClose={() => setIsAdminModalVisible(false)}
+        />
+
+        {/* INCOMING REMOTE BINDING MODAL */}
+        <IncomingPairingModal
+          visible={Boolean(incomingPairingRequest)}
+          requestData={incomingPairingRequest}
+          isApproving={isApprovingPairing}
+          onApprove={handleApprovePairing}
+          onDecline={handleDeclinePairing}
         />
 
       </View>

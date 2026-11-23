@@ -304,3 +304,76 @@ export async function syncStationConfig(config) {
     };
   }
 }
+
+/**
+ * Polls for incoming remote pairing request for this hardware kiosk terminal.
+ * @param {string} stationId Machine / Terminal ID (e.g. SLL-12901)
+ */
+export async function pollPairingStatus(stationId) {
+  if (!stationId || stationId === 'SETUP REQUIRED') {
+    return { success: false, bindingStatus: 'UNBOUND' };
+  }
+
+  const url = `${ENV.apiBaseUrl}/stations/${encodeURIComponent(stationId)}/pairing-status`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const result = await response.json();
+      return {
+        success: true,
+        stationId: result.stationId,
+        bindingStatus: result.bindingStatus || 'UNBOUND',
+        pairingCode: result.pairingCode,
+        stationName: result.stationName,
+        address: result.address,
+      };
+    }
+  } catch (err) {
+    // Quiet fail on network hiccups during polling
+  }
+
+  return { success: false, bindingStatus: 'UNBOUND' };
+}
+
+/**
+ * Confirms pairing handshake when technician approves on-screen dialog.
+ * @param {string} stationId Machine ID
+ * @param {string} pairingCode 6-digit verification code
+ */
+export async function confirmPairingHandshake(stationId, pairingCode) {
+  const url = `${ENV.apiBaseUrl}/stations/pair-confirm`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stationId, pairingCode }),
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      return {
+        success: true,
+        message: result.message || 'Kiosk paired successfully.',
+        data: result.data,
+      };
+    } else {
+      const errData = await response.json().catch(() => ({}));
+      return {
+        success: false,
+        message: errData.message || 'Pairing confirmation rejected by server.',
+      };
+    }
+  } catch (err) {
+    return {
+      success: false,
+      message: 'Network connection issue confirming pairing.',
+    };
+  }
+}
