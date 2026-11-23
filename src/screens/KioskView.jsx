@@ -6,8 +6,10 @@ import { ServicePreferenceModal } from './ServicePreferenceModal';
 import { DoorOpenScreen } from './DoorOpenScreen';
 import { PickupScreen } from './PickupScreen';
 import { PickupPaymentModal } from './PickupPaymentModal';
+import { AdminSetupModal } from './AdminSetupModal';
 import { openLockerDoor } from '../native/LockerBridge';
 import { submitDropoffOrder, fetchStationAvailability } from '../services/api';
+import { loadMachineConfig } from '../services/storage';
 import { COLORS } from '../theme/colors';
 import { ENV } from '../config/env';
 
@@ -19,7 +21,26 @@ import { ENV } from '../config/env';
 //   HOME -> PICKUP_PIN -> DOOR_OPENED -> HOME
 // ==============================================================================
 export function KioskView() {
-  const stationId = ENV.stationId;
+  // Dynamic Station Profile (persisted across reboots via SharedPreferences/localStorage)
+  const [machineConfig, setMachineConfig] = useState({
+    stationId: ENV.stationId || 'CMH-01',
+    stationName: ENV.stationName || 'Central Mall Depot',
+    totalDoors: 16,
+  });
+
+  const stationId = machineConfig.stationId;
+
+  // Admin Fleet Setup Modal state
+  const [isAdminModalVisible, setIsAdminModalVisible] = useState(false);
+
+  // Load persisted machine profile on boot
+  useEffect(function () {
+    loadMachineConfig().then(function (cfg) {
+      if (cfg && cfg.stationId) {
+        setMachineConfig(cfg);
+      }
+    });
+  }, []);
 
   // Current screen state
   // In Vanilla JS: let currentStep = 'HOME';
@@ -163,6 +184,7 @@ export function KioskView() {
     setSessionOrder(function (prev) {
       return {
         ...prev,
+        orderId: apiResponse?.orderId || 'ORD-NEW',
         assignedBox: assignedCompartment,
         compartmentNumber: assignedCompartment,
       };
@@ -224,6 +246,7 @@ export function KioskView() {
             isStationFull={stationAvailability.isStationFull}
             onStartDropoff={handleStartDropoff}
             onStartPickup={handleStartPickup}
+            onOpenAdmin={() => setIsAdminModalVisible(true)}
           />
         )}
 
@@ -244,6 +267,7 @@ export function KioskView() {
               isStationFull={stationAvailability.isStationFull}
               onStartDropoff={handleStartDropoff}
               onStartPickup={handleStartPickup}
+              onOpenAdmin={() => setIsAdminModalVisible(true)}
             />
             <ServicePreferenceModal
               visible={true}
@@ -261,6 +285,7 @@ export function KioskView() {
           <DoorOpenScreen
             stationId={stationId}
             assignedBox={sessionOrder.assignedBox}
+            orderId={sessionOrder.orderId}
             onFinish={handleResetToHome}
           />
         )}
@@ -279,6 +304,16 @@ export function KioskView() {
           order={pendingPaymentOrder}
           onClose={() => setIsPaymentModalVisible(false)}
           onPaymentSuccess={executeDoorUnlock}
+        />
+
+        {/* FLEET MANAGEMENT & TECHNICIAN ADMIN MODAL */}
+        <AdminSetupModal
+          visible={isAdminModalVisible}
+          currentConfig={machineConfig}
+          onConfigUpdated={(cfg) => {
+            setMachineConfig(cfg);
+          }}
+          onClose={() => setIsAdminModalVisible(false)}
         />
 
       </View>

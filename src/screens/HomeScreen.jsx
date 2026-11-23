@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { COLORS, FONTS } from '../theme';
 import { ENV } from '../config/env';
@@ -10,14 +10,18 @@ import { ENV } from '../config/env';
 //   - Zero emojis, zero feature clutter, zero walls of text
 //   - 2 large, confident, distraction-free touch actions: Drop Off & Pick Up
 //   - Smart capacity detection: Fades Drop Off when all lockers are occupied
+//   - Secret 5-tap Admin Fleet Setup trigger on station title
 // ==============================================================================
 export function HomeScreen(props) {
   const onStartDropoff = props.onStartDropoff;
   const onStartPickup = props.onStartPickup;
+  const onOpenAdmin = props.onOpenAdmin;
   const stationId = props.stationId || ENV.stationId;
   const isStationFull = Boolean(props.isStationFull);
 
   const [currentTime, setCurrentTime] = useState('');
+  const [adminTapCount, setAdminTapCount] = useState(0);
+  const lastTapRef = useRef(0);
 
   useEffect(function () {
     function updateClock() {
@@ -33,11 +37,29 @@ export function HomeScreen(props) {
     };
   }, []);
 
+  // Secret 5-tap technician gesture on Station Name
+  function handleSecretAdminTap() {
+    const now = Date.now();
+    if (now - lastTapRef.current < 2500) {
+      const nextTaps = adminTapCount + 1;
+      setAdminTapCount(nextTaps);
+      if (nextTaps >= 5) {
+        setAdminTapCount(0);
+        if (onOpenAdmin) {
+          onOpenAdmin();
+        }
+      }
+    } else {
+      setAdminTapCount(1);
+    }
+    lastTapRef.current = now;
+  }
+
   function handleDropoffPress() {
     if (isStationFull) {
       Alert.alert(
         'Station Full',
-        'All 16 locker compartments are currently occupied. Please check back later once customer laundry has been picked up.',
+        'All locker compartments are currently occupied. Please check back later once customer laundry has been picked up.',
         [{ text: 'OK' }]
       );
       return;
@@ -52,11 +74,15 @@ export function HomeScreen(props) {
       {/* 1. QUIET MINIMAL TOP BAR                                      */}
       {/* ------------------------------------------------------------- */}
       <View style={styles.topBar}>
-        <View style={styles.stationGroup}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={handleSecretAdminTap}
+          style={styles.stationGroup}
+        >
           <Text style={styles.brandName}>Smart Locker</Text>
           <Text style={styles.stationDivider}>/</Text>
           <Text style={styles.stationCode}>{stationId}</Text>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.statusGroup}>
           <View style={styles.liveDot} />

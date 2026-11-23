@@ -1,11 +1,15 @@
 package com.lockerui;
 
 import java.io.File;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.util.Log;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.Promise;
+import com.facebook.react.bridge.WritableMap;
+import com.facebook.react.bridge.Arguments;
 
 import android_serialport_api.SerialServer;
 import android_serialport_api.SerialControl;
@@ -112,6 +116,45 @@ public class LockerModule extends ReactContextBaseJavaModule {
             }
         } catch (Throwable e) {
             promise.resolve(false);
+        }
+    }
+
+    /**
+     * Persists hardware station profile (station ID, station name, total doors)
+     * into Android SharedPreferences so machine identity survives reboots.
+     */
+    @ReactMethod
+    public void saveMachineConfig(String stationId, String stationName, int totalDoors, Promise promise) {
+        try {
+            SharedPreferences prefs = getReactApplicationContext().getSharedPreferences("SmartLockerPrefs", Context.MODE_PRIVATE);
+            prefs.edit()
+                .putString("stationId", stationId)
+                .putString("stationName", stationName)
+                .putInt("totalDoors", totalDoors)
+                .apply();
+            Log.i(TAG, "Saved machine config: Station=" + stationId + ", Doors=" + totalDoors);
+            promise.resolve(true);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to save machine config: " + e.getMessage());
+            promise.reject("CONFIG_SAVE_ERROR", e.getMessage());
+        }
+    }
+
+    /**
+     * Reads saved hardware station profile from Android SharedPreferences.
+     */
+    @ReactMethod
+    public void getMachineConfig(Promise promise) {
+        try {
+            SharedPreferences prefs = getReactApplicationContext().getSharedPreferences("SmartLockerPrefs", Context.MODE_PRIVATE);
+            WritableMap map = Arguments.createMap();
+            map.putString("stationId", prefs.getString("stationId", null));
+            map.putString("stationName", prefs.getString("stationName", null));
+            map.putInt("totalDoors", prefs.getInt("totalDoors", 0));
+            promise.resolve(map);
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to get machine config: " + e.getMessage());
+            promise.reject("CONFIG_READ_ERROR", e.getMessage());
         }
     }
 }

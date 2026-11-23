@@ -3,6 +3,9 @@ import * as stationsController from '../controllers/stations.controller.js';
 
 const router = Router();
 
+// Save and synchronize locker station settings and door sizes to database
+router.post('/sync', stationsController.handleSyncSettings);
+
 // Live compartment availability for kiosk display
 router.get('/:id/availability', stationsController.handleGetAvailability);
 

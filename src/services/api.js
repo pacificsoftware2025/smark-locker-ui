@@ -238,3 +238,59 @@ export async function confirmOrderPayment(orderId, paymentMethod = 'qrph') {
     };
   }
 }
+
+/**
+ * Saves and synchronizes locker station configuration and per-door sizes to PostgreSQL database.
+ * @param {Object} config Station configuration object
+ */
+export async function syncStationConfig(config) {
+  const url = `${ENV.apiBaseUrl}/stations/sync`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout for Render free tier spin-up
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        stationId: config.stationId,
+        stationName: config.stationName,
+        locationTag: config.locationTag,
+        totalDoors: config.totalDoors,
+        doorSizes: config.doorSizes,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log('[Kiosk API] Station settings synced to database successfully:', result);
+      return {
+        success: true,
+        message: result.message || 'Locker settings saved to database.',
+        data: result.data,
+        isOfflineMode: false,
+      };
+    } else {
+      const errData = await response.json().catch(() => ({}));
+      console.warn('[Kiosk API] Server returned error syncing station settings:', errData.message);
+      return {
+        success: false,
+        message: errData.message || 'Database could not save station settings.',
+        isOfflineMode: false,
+      };
+    }
+  } catch (err) {
+    console.warn('[Kiosk API] Database sync network issue (offline mode):', err.message);
+    return {
+      success: false,
+      message: 'Network issue connecting to cloud database. Settings saved locally.',
+      isOfflineMode: true,
+    };
+  }
+}

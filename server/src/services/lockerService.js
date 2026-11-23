@@ -94,3 +94,51 @@ export async function getStationCompartments(stationId) {
   const result = await query(sql, [stationId]);
   return result.rows;
 }
+
+// Upserts station profile and synchronizes physical compartment door sizes in PostgreSQL database
+export async function syncStationSettings({ stationId, stationName, locationTag, totalDoors, doorSizes }) {
+  const normStationId = String(stationId).trim().toUpperCase();
+  const normName = String(stationName || 'Smart Laundry Locker').trim();
+  const normAddress = String(locationTag || 'Main Entrance').trim();
+  const normDoors = Number(totalDoors) || 16;
+
+  // 1. Upsert locker_stations table
+  const stationSql = `
+    INSERT INTO locker_stations (id, name, address, total_compartments, status, updated_at)
+    VALUES ($1, $2, $3, $4, 'online', CURRENT_TIMESTAMP)
+    ON CONFLICT (id) DO UPDATE SET
+      name = EXCLUDED.name,
+      address = EXCLUDED.address,
+      total_compartments = EXCLUDED.total_compartments,
+      status = 'online',
+      updated_at = CURRENT_TIMESTAMP
+    RETURNING *;
+  `;
+  const stationRes = await query(stationSql, [normStationId, normName, normAddress, normDoors]);
+
+  // 2. Upsert locker_compartments for each door (from 1 to totalDoors)
+  const compartments = [];
+  for (let i = 1; i <= normDoors; i++) {
+    const boxNum = i < 10 ? `0${i}` : `${i}`;
+    let size = (doorSizes && doorSizes[i]) ? String(doorSizes[i]).toLowerCase() : 'medium';
+    if (!['small', 'medium', 'large'].includes(size)) {
+      size = 'medium';
+    }
+
+    const compSql = `
+      INSERT INTO locker_compartments (station_id, box_number, size, status, updated_at)
+      VALUES ($1, $2, $3, 'available', CURRENT_TIMESTAMP)
+      ON CONFLICT (station_id, box_number) DO UPDATE SET
+        size = EXCLUDED.size,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING *;
+    `;
+    const compRes = await query(compSql, [normStationId, boxNum, size]);
+    compartments.push(compRes.rows[0]);
+  }
+
+  return {
+    station: stationRes.rows[0],
+    compartments: compartments,
+  };
+}

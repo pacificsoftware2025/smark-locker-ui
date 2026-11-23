@@ -25,3 +25,49 @@ export async function openLockerDoor(boardId, doorNumber, timeoutMs = ENV.serial
   console.log(`[DEV MODE] Simulated opening Locker: Board ${boardId}, Door ${doorNumber}`);
   return 'SUCCESS';
 }
+
+/**
+ * Reads sensor status of an individual door.
+ */
+export async function isLockerBoxOpen(boardId, doorNumber) {
+  if (LockerModule && typeof LockerModule.isBoxOpen === 'function') {
+    try {
+      return await LockerModule.isBoxOpen(boardId, doorNumber);
+    } catch (err) {
+      console.warn('Hardware sensor read error:', err.message);
+      return false;
+    }
+  }
+  return false;
+}
+
+/**
+ * Saves machine configuration to Android SharedPreferences.
+ */
+export async function saveNativeMachineConfig(stationId, stationName, totalDoors) {
+  if (LockerModule && typeof LockerModule.saveMachineConfig === 'function') {
+    try {
+      return await LockerModule.saveMachineConfig(stationId, stationName, totalDoors);
+    } catch (err) {
+      console.warn('Failed to save native config:', err.message);
+    }
+  }
+  return false;
+}
+
+/**
+ * Reads machine configuration from Android SharedPreferences.
+ */
+export async function getNativeMachineConfig() {
+  if (LockerModule && typeof LockerModule.getMachineConfig === 'function') {
+    try {
+      const config = await LockerModule.getMachineConfig();
+      if (config && config.stationId) {
+        return config;
+      }
+    } catch (err) {
+      console.warn('Failed to read native config:', err.message);
+    }
+  }
+  return null;
+}
