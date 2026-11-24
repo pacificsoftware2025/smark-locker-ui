@@ -100,7 +100,7 @@ export function HomeScreen(props) {
           <Text style={styles.stationDivider}>/</Text>
           {isUnprovisioned ? (
             <View style={styles.unprovisionedBadge}>
-              <Text style={styles.unprovisionedBadgeText}>SETUP REQUIRED &bull; {hardwareId}</Text>
+              <Text style={styles.unprovisionedBadgeText}>SETUP REQUIRED</Text>
             </View>
           ) : (
             <Text style={styles.stationCode}>{stationId}</Text>
@@ -183,7 +183,7 @@ export function HomeScreen(props) {
       {/* ------------------------------------------------------------- */}
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          Contactless 24/7 &bull; {isUnprovisioned ? `Terminal ${hardwareId} (Setup Required)` : stationId}
+          Contactless 24/7 &bull; {isUnprovisioned ? 'Smartbox Laundry Locker' : stationId}
         </Text>
       </View>
 

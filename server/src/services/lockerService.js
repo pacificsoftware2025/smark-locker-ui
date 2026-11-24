@@ -201,6 +201,20 @@ export async function requestStationPairing({ stationId, stationName, address, b
   const displayName = String(stationName || `Station ${normStationId}`).trim();
   const displayAddress = String(address || branchTag || 'Provisioned Branch Location').trim();
 
+  // Detect real capacity if kiosk already created compartments or station exists
+  let initialDoors = 16;
+  try {
+    const compCountRes = await query(
+      'SELECT COUNT(*) FROM locker_compartments WHERE station_id = $1',
+      [normStationId]
+    );
+    if (compCountRes.rows && Number(compCountRes.rows[0].count) > 0) {
+      initialDoors = Number(compCountRes.rows[0].count);
+    }
+  } catch (err) {
+    // fallback to 16
+  }
+
   // Generate 6-digit pairing verification code
   const pairingCode = String(Math.floor(100000 + Math.random() * 900000));
 
@@ -208,10 +222,15 @@ export async function requestStationPairing({ stationId, stationName, address, b
     INSERT INTO locker_stations (
       id, name, address, total_compartments, status, binding_status, pairing_code, pairing_requested_at, created_at, updated_at
     )
-    VALUES ($1, $2, $3, 16, 'online', 'PENDING_CONFIRMATION', $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    VALUES ($1, $2, $3, $4, 'online', 'PENDING_CONFIRMATION', $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     ON CONFLICT (id) DO UPDATE SET
       name = EXCLUDED.name,
       address = EXCLUDED.address,
+      total_compartments = CASE 
+        WHEN locker_stations.total_compartments IS NOT NULL AND locker_stations.total_compartments != 16 
+        THEN locker_stations.total_compartments 
+        ELSE EXCLUDED.total_compartments 
+      END,
       binding_status = 'PENDING_CONFIRMATION',
       pairing_code = EXCLUDED.pairing_code,
       pairing_requested_at = CURRENT_TIMESTAMP,
@@ -220,7 +239,7 @@ export async function requestStationPairing({ stationId, stationName, address, b
   `;
 
   try {
-    const res = await query(sql, [normStationId, displayName, displayAddress, pairingCode]);
+    const res = await query(sql, [normStationId, displayName, displayAddress, initialDoors, pairingCode]);
     if (res.rows && res.rows[0]) {
       return res.rows[0];
     }

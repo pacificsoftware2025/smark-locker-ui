@@ -71,6 +71,10 @@ export async function handleGetPairingStatus(req, res, next) {
     }
 
     const statusData = await lockerService.getStationPairingStatus(stationId);
+    const comps = await lockerService.getStationCompartments(stationId);
+    const realDoorCount = (Array.isArray(comps) && comps.length > 0)
+      ? comps.length
+      : (Number(statusData.total_compartments) || 16);
 
     return res.status(200).json({
       success: true,
@@ -80,6 +84,8 @@ export async function handleGetPairingStatus(req, res, next) {
       pairingRequestedAt: statusData.pairing_requested_at || null,
       stationName: statusData.name || null,
       address: statusData.address || null,
+      total_compartments: realDoorCount,
+      totalDoors: realDoorCount,
       exists: statusData.exists !== false,
     });
   } catch (err) {

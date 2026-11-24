@@ -399,8 +399,12 @@ export function AdminSetupModal(props) {
                 {/* Machine Telemetry Metadata */}
                 <View style={styles.authTelemetryBox}>
                   <View style={styles.telemetryRow}>
+                    <Text style={styles.telemetryLabel}>HARDWARE TERMINAL ID</Text>
+                    <Text style={styles.telemetryValue}>{currentConfig.hardwareId || 'SLL-READY'}</Text>
+                  </View>
+                  <View style={styles.telemetryRow}>
                     <Text style={styles.telemetryLabel}>LOCKER STATION</Text>
-                    <Text style={styles.telemetryValue}>{stationId || 'SLL-READY'}</Text>
+                    <Text style={styles.telemetryValue}>{stationId || 'SETUP REQUIRED'}</Text>
                   </View>
                   <View style={styles.telemetryRow}>
                     <Text style={styles.telemetryLabel}>HARDWARE BUS</Text>
