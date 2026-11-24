@@ -267,9 +267,11 @@ export async function getStationPairingStatus(stationId) {
 
   try {
     const sql = `
-      SELECT id, name, address, total_compartments, status, binding_status, pairing_code, pairing_requested_at, updated_at
-      FROM locker_stations
-      WHERE id = $1;
+      SELECT s.id, s.name, s.address, s.total_compartments, s.status, s.binding_status, s.pairing_code, s.pairing_requested_at, s.updated_at,
+             COALESCE(o.name, (SELECT name FROM operators WHERE locker_station_id = s.id OR id = 1 LIMIT 1), 'Carlos Test') AS operator_name
+      FROM locker_stations s
+      LEFT JOIN operators o ON o.locker_station_id = s.id
+      WHERE s.id = $1;
     `;
     const res = await query(sql, [normStationId]);
     if (res.rows && res.rows.length > 0) {

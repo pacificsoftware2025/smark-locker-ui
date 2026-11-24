@@ -332,6 +332,7 @@ export async function pollPairingStatus(stationId) {
         pairingCode: result.pairingCode,
         stationName: result.stationName,
         address: result.address,
+        operatorName: result.operatorName || result.operator_name || null,
       };
     }
   } catch (err) {

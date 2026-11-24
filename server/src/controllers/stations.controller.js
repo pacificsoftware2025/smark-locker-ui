@@ -87,6 +87,7 @@ export async function handleGetPairingStatus(req, res, next) {
       total_compartments: realDoorCount,
       totalDoors: realDoorCount,
       exists: statusData.exists !== false,
+      operatorName: statusData.operator_name || statusData.operatorName || null,
     });
   } catch (err) {
     next(err);

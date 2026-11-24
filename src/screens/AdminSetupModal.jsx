@@ -13,7 +13,7 @@ import {
 import { COLORS } from '../theme/colors';
 import { openLockerDoor } from '../native/LockerBridge';
 import { saveMachineConfig } from '../services/storage';
-import { syncStationConfig } from '../services/api';
+import { syncStationConfig, pollPairingStatus } from '../services/api';
 import { LoggerService } from '../services/logger';
 
 // ==============================================================================
@@ -68,6 +68,41 @@ export function AdminSetupModal(props) {
   );
   const [locationTag, setLocationTag] = useState('Level 1, Main Entrance');
   const [totalDoors, setTotalDoors] = useState(Number(currentConfig.totalDoors || 16));
+
+  // Station Cloud Binding & Operator Attribution
+  const [isStationBound, setIsStationBound] = useState(function() {
+    if (currentConfig.bindingStatus === 'BOUND_ACTIVE') return true;
+    if (currentConfig.stationId && currentConfig.stationId !== 'SETUP REQUIRED') return true;
+    return false;
+  });
+  const [boundOperatorName, setBoundOperatorName] = useState(currentConfig.operatorName || 'Carlos Test');
+
+  // Verify live cloud binding status & assigned operator
+  useEffect(() => {
+    if (!stationId || stationId === 'SETUP REQUIRED') {
+      setIsStationBound(false);
+      return;
+    }
+    let isMounted = true;
+    pollPairingStatus(stationId)
+      .then((res) => {
+        if (!isMounted) return;
+        if (res && res.success) {
+          if (res.bindingStatus === 'BOUND_ACTIVE') {
+            setIsStationBound(true);
+            if (res.operatorName) {
+              setBoundOperatorName(res.operatorName);
+            }
+          } else {
+            setIsStationBound(false);
+          }
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [stationId]);
 
   // Per-Compartment Door Sizes: doorNumber -> 'small' | 'medium' | 'large'
   const [doorSizes, setDoorSizes] = useState(function() {
@@ -360,7 +395,7 @@ export function AdminSetupModal(props) {
   return (
     <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.card}>
+        <View style={[styles.card, viewState === 'AUTH' && styles.cardAuth]}>
           
           {/* ========================================================= */}
           {/* TOP BAR: Title & Close Button                             */}
@@ -380,50 +415,8 @@ export function AdminSetupModal(props) {
           {/* VIEW 1: COMMERCIAL TECHNICIAN PIN AUTHENTICATION          */}
           {/* ========================================================= */}
           {viewState === 'AUTH' ? (
-            <View style={styles.authSplitLayout}>
-              
-              {/* LEFT COLUMN: Industrial Security Identity Card */}
-              <View style={styles.authInfoCol}>
-                <View style={styles.securityBadge}>
-                  <View style={styles.securityPulseDot} />
-                  <Text style={styles.securityBadgeText}>RESTRICTED TERMINAL</Text>
-                </View>
-
-                <View style={styles.authTitleGroup}>
-                  <Text style={styles.authMainTitle}>Technician Gateway</Text>
-                  <Text style={styles.authMainSub}>
-                    Commercial machine provisioning and hardware diagnostics.
-                  </Text>
-                </View>
-
-                {/* Machine Telemetry Metadata */}
-                <View style={styles.authTelemetryBox}>
-                  <View style={styles.telemetryRow}>
-                    <Text style={styles.telemetryLabel}>HARDWARE TERMINAL ID</Text>
-                    <Text style={styles.telemetryValue}>{currentConfig.hardwareId || 'SLL-READY'}</Text>
-                  </View>
-                  <View style={styles.telemetryRow}>
-                    <Text style={styles.telemetryLabel}>LOCKER STATION</Text>
-                    <Text style={styles.telemetryValue}>{stationId || 'SETUP REQUIRED'}</Text>
-                  </View>
-                  <View style={styles.telemetryRow}>
-                    <Text style={styles.telemetryLabel}>HARDWARE BUS</Text>
-                    <Text style={styles.telemetryValue}>RS485 /dev/ttyS3</Text>
-                  </View>
-                  <View style={styles.telemetryRow}>
-                    <Text style={styles.telemetryLabel}>SECURITY LEVEL</Text>
-                    <Text style={styles.telemetryValue}>Tier-1 Master Admin</Text>
-                  </View>
-                </View>
-
-                <View style={styles.authNoticeCard}>
-                  <Text style={styles.authNoticeText}>
-                    Authorized service personnel only. All access attempts are recorded in the onboard tamper buffer.
-                  </Text>
-                </View>
-              </View>
-
-              {/* RIGHT COLUMN: Touch Numpad & Masked PIN Display */}
+            <View style={styles.authSingleLayout}>
+              {/* Touch Numpad & Masked PIN Display */}
               <View style={styles.authNumpadCol}>
                 <View style={styles.numpadHeader}>
                   <Text style={styles.numpadTitle}>Enter Master PIN</Text>
@@ -631,7 +624,15 @@ export function AdminSetupModal(props) {
                     
                     {/* Locker ID with Integrated Generator & Disabled Manual Input */}
                     <View style={styles.fieldBlock}>
-                      <Text style={styles.fieldLabel}>Locker ID</Text>
+                      <View style={styles.labelWithHintRow}>
+                        <Text style={styles.fieldLabel}>Locker ID</Text>
+                        {isStationBound && (
+                          <View style={styles.boundStatusBadge}>
+                            <View style={styles.boundDotGreen} />
+                            <Text style={styles.boundStatusBadgeText}>BOUND ACTIVE</Text>
+                          </View>
+                        )}
+                      </View>
                       <View style={styles.idInputGroup}>
                         <TextInput
                           style={[styles.idInputField, styles.idInputFieldDisabled]}
@@ -641,13 +642,41 @@ export function AdminSetupModal(props) {
                           autoCapitalize="characters"
                         />
                         <TouchableOpacity
-                          style={styles.idGenerateBtn}
+                          style={[
+                            styles.idGenerateBtn,
+                            isStationBound && styles.idGenerateBtnDisabled,
+                          ]}
                           onPress={handleGenerateLockerId}
-                          activeOpacity={0.8}
+                          disabled={isStationBound}
+                          activeOpacity={isStationBound ? 1 : 0.8}
                         >
-                          <Text style={styles.idGenerateBtnText}>Generate Locker ID</Text>
+                          <Text
+                            style={[
+                              styles.idGenerateBtnText,
+                              isStationBound && styles.idGenerateBtnTextDisabled,
+                            ]}
+                          >
+                            {isStationBound ? 'Locker ID Locked' : 'Generate Locker ID'}
+                          </Text>
                         </TouchableOpacity>
                       </View>
+
+                      {/* Display Bound Operator Info */}
+                      {isStationBound && (
+                        <View style={styles.boundOperatorCard}>
+                          <View style={styles.boundOperatorIconWrap}>
+                            <View style={styles.boundDotGreenPulse} />
+                          </View>
+                          <View style={styles.boundOperatorTextGroup}>
+                            <Text style={styles.boundOperatorLabel}>
+                              Laundry Locker binded to OPERATOR:
+                            </Text>
+                            <Text style={styles.boundOperatorName}>
+                              {boundOperatorName || 'Carlos Test'}
+                            </Text>
+                          </View>
+                        </View>
+                      )}
                     </View>
 
                     {/* Laundry Locker Name */}
@@ -1142,6 +1171,10 @@ const styles = StyleSheet.create({
     elevation: 20,
     flexDirection: 'column',
   },
+  cardAuth: {
+    maxWidth: 480,
+    height: 560,
+  },
   topBar: {
     height: 64,
     paddingHorizontal: 24,
@@ -1187,6 +1220,10 @@ const styles = StyleSheet.create({
   authSplitLayout: {
     flex: 1,
     flexDirection: 'row',
+  },
+  authSingleLayout: {
+    flex: 1,
+    backgroundColor: COLORS.white,
   },
   authInfoCol: {
     width: 320,
@@ -1553,11 +1590,88 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  idGenerateBtnDisabled: {
+    backgroundColor: '#e2e8f0',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
   idGenerateBtnText: {
     fontFamily: FONT_FAMILY,
     fontSize: 12,
     fontWeight: '800',
     color: COLORS.white,
+  },
+  idGenerateBtnTextDisabled: {
+    color: '#94a3b8',
+  },
+  boundStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(34, 197, 94, 0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  boundDotGreen: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22c55e',
+  },
+  boundStatusBadgeText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#16a34a',
+    letterSpacing: 0.5,
+  },
+  boundOperatorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1.5,
+    borderColor: '#bbf7d0',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 8,
+  },
+  boundOperatorIconWrap: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#dcfce7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boundDotGreenPulse: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#16a34a',
+  },
+  boundOperatorTextGroup: {
+    flex: 1,
+    gap: 2,
+  },
+  boundOperatorLabel: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#15803d',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  boundOperatorName: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#14532d',
+    letterSpacing: -0.2,
   },
   textInput: {
     fontFamily: FONT_FAMILY,
