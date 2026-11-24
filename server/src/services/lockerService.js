@@ -150,10 +150,18 @@ export async function syncStationSettings({ stationId, stationName, locationTag,
 // 1. Operator requests remote pairing from web dashboard to physical kiosk
 export async function requestStationPairing({ stationId, stationName, address, branchTag }) {
   if (!stationId) {
-    throw new Error('Machine stationId is required for binding request.');
+    const err = new Error('Machine stationId is required for binding request.');
+    err.statusCode = 400;
+    throw err;
   }
 
   const normStationId = String(stationId).trim().toUpperCase();
+  if (normStationId.includes('@') || normStationId.includes(' ') || normStationId.includes('.')) {
+    const err = new Error('Invalid stationId format. Must be an alphanumeric hardware code (e.g. SLL-12901 or CMH-01).');
+    err.statusCode = 400;
+    throw err;
+  }
+
   const displayName = String(stationName || `Station ${normStationId}`).trim();
   const displayAddress = String(address || branchTag || 'Provisioned Branch Location').trim();
 
@@ -210,7 +218,10 @@ export async function getStationPairingStatus(stationId) {
     `;
     const res = await query(sql, [normStationId]);
     if (res.rows && res.rows.length > 0) {
-      return res.rows[0];
+      return {
+        ...res.rows[0],
+        exists: true,
+      };
     }
   } catch (err) {
     console.warn('[LockerService] getStationPairingStatus DB error:', err.message);
@@ -218,7 +229,8 @@ export async function getStationPairingStatus(stationId) {
 
   return {
     id: normStationId,
-    binding_status: 'UNBOUND',
+    exists: false,
+    binding_status: 'UNREGISTERED',
     pairing_code: null,
     pairing_requested_at: null,
   };

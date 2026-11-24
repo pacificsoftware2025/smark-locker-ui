@@ -17,15 +17,24 @@ export async function handleGetAllStations(req, res, next) {
   }
 }
 
+const MACHINE_ID_REGEX = /^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$/;
+
+function isValidMachineId(id) {
+  if (!id || typeof id !== 'string') return false;
+  const clean = id.trim();
+  if (clean.includes('@') || clean.includes(' ') || clean.includes('.')) return false;
+  return clean.length >= 3 && clean.length <= 30 && MACHINE_ID_REGEX.test(clean);
+}
+
 // POST /api/stations/pair-request (Operator initiates remote pairing)
 export async function handlePairRequest(req, res, next) {
   try {
     const { stationId, stationName, address, branchTag } = req.body;
 
-    if (!stationId) {
+    if (!stationId || !isValidMachineId(stationId)) {
       return res.status(400).json({
         success: false,
-        message: 'stationId is required to initiate pairing',
+        message: 'Invalid stationId format. Must be an alphanumeric hardware code (e.g. SLL-12901 or CMH-01), not an email address.',
       });
     }
 
@@ -42,6 +51,9 @@ export async function handlePairRequest(req, res, next) {
       data: result,
     });
   } catch (err) {
+    if (err.statusCode) {
+      return res.status(err.statusCode).json({ success: false, message: err.message });
+    }
     next(err);
   }
 }
@@ -51,10 +63,10 @@ export async function handleGetPairingStatus(req, res, next) {
   try {
     const { stationId } = req.params;
 
-    if (!stationId) {
+    if (!stationId || !isValidMachineId(stationId)) {
       return res.status(400).json({
         success: false,
-        message: 'stationId is required',
+        message: 'Invalid stationId format. Must be an alphanumeric hardware code (e.g. SLL-12901 or CMH-01).',
       });
     }
 
@@ -68,6 +80,7 @@ export async function handleGetPairingStatus(req, res, next) {
       pairingRequestedAt: statusData.pairing_requested_at || null,
       stationName: statusData.name || null,
       address: statusData.address || null,
+      exists: statusData.exists !== false,
     });
   } catch (err) {
     next(err);
