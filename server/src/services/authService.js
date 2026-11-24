@@ -44,11 +44,10 @@ export function generateSessionToken(operatorId) {
  * Registers a new operator account in the database.
  * Throws an Error with code 'CONFLICT' if email already exists.
  */
-export async function registerOperator({ name, email, phone, password, lockerStationId }) {
+export async function registerOperator({ name, email, phone, password }) {
   const normalizedEmail = email.trim().toLowerCase();
   const cleanName = name.trim();
   const cleanPhone = phone ? phone.trim() : null;
-  const cleanStationId = lockerStationId ? lockerStationId.trim() : null;
 
   // 1. Check if email already exists
   const existingCheck = await query(
@@ -64,12 +63,12 @@ export async function registerOperator({ name, email, phone, password, lockerSta
   // 2. Hash password securely
   const passwordHash = hashPassword(password);
 
-  // 3. Insert new operator
+  // 3. Insert new operator (locker_station_id is null on registration)
   const insertResult = await query(
     `INSERT INTO operators (name, email, phone, password_hash, locker_station_id, status)
-     VALUES ($1, $2, $3, $4, $5, 'active')
+     VALUES ($1, $2, $3, $4, NULL, 'active')
      RETURNING id, name, email, phone, locker_station_id, status, created_at, updated_at`,
-    [cleanName, normalizedEmail, cleanPhone, passwordHash, cleanStationId]
+    [cleanName, normalizedEmail, cleanPhone, passwordHash]
   );
 
   const newOperator = insertResult.rows[0];

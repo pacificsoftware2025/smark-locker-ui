@@ -12,7 +12,7 @@ import * as authService from '../services/authService.js';
  */
 export async function handleRegister(req, res, next) {
   try {
-    const { name, email, phone, password, lockerStationId } = req.body;
+    const { name, email, phone, password } = req.body;
 
     if (!name || typeof name !== 'string' || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Name is required' });
@@ -29,7 +29,6 @@ export async function handleRegister(req, res, next) {
       email,
       phone,
       password,
-      lockerStationId,
     });
 
     return res.status(201).json({
