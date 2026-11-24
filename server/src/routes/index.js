@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import ordersRouter from './orders.routes.js';
 import stationsRouter from './stations.routes.js';
+import authRouter from './auth.routes.js';
 
 const apiRouter = Router();
 
@@ -10,6 +11,7 @@ apiRouter.get('/health', (req, res) => {
 });
 
 // Mount modules
+apiRouter.use('/auth', authRouter);
 apiRouter.use('/orders', ordersRouter);
 apiRouter.use('/stations', stationsRouter);
 
