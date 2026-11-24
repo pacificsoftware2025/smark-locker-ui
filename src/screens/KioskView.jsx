@@ -48,20 +48,23 @@ export function KioskView() {
     });
   }, []);
 
-  // Background polling for remote pairing handshake when in unprovisioned state
+  // Background polling for remote pairing handshake
   useEffect(function () {
-    const isUnprovisioned = !machineConfig.stationId || machineConfig.stationId === 'SETUP REQUIRED';
-    if (!isUnprovisioned) return;
+    const activeTerminalId = (machineConfig.stationId && machineConfig.stationId !== 'SETUP REQUIRED')
+      ? machineConfig.stationId
+      : (machineConfig.hardwareId || getTerminalHardwareId());
 
-    const queryTerminalId = machineConfig.hardwareId || getTerminalHardwareId();
+    if (!activeTerminalId || activeTerminalId === 'SETUP REQUIRED') return;
 
-    const interval = setInterval(async function () {
+    let isMounted = true;
+
+    async function checkIncomingPairing() {
       try {
-        const res = await pollPairingStatus(queryTerminalId);
-        if (res && res.success && res.bindingStatus === 'PENDING_CONFIRMATION') {
+        const res = await pollPairingStatus(activeTerminalId);
+        if (isMounted && res && res.success && res.bindingStatus === 'PENDING_CONFIRMATION') {
           setIncomingPairingRequest({
-            stationId: queryTerminalId,
-            stationName: res.stationName || `Station ${queryTerminalId}`,
+            stationId: activeTerminalId,
+            stationName: res.stationName || `Station ${activeTerminalId}`,
             address: res.address || 'Assigned Branch Location',
             pairingCode: res.pairingCode || '849201',
           });
@@ -69,9 +72,13 @@ export function KioskView() {
       } catch (err) {
         // Quiet fail on network hiccups
       }
-    }, 3500);
+    }
+
+    checkIncomingPairing();
+    const interval = setInterval(checkIncomingPairing, 3000);
 
     return function () {
+      isMounted = false;
       clearInterval(interval);
     };
   }, [machineConfig.stationId, machineConfig.hardwareId]);

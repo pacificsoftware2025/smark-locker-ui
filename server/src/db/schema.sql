@@ -84,3 +84,20 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_payments_station_id ON payments(station_id);
 CREATE INDEX IF NOT EXISTS idx_payments_paid_at ON payments(paid_at);
 CREATE INDEX IF NOT EXISTS idx_payments_method ON payments(payment_method);
+
+-- 5. Operators Table (Central Office & Branch Staff)
+CREATE TABLE IF NOT EXISTS operators (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(150) NOT NULL,
+  email VARCHAR(150) UNIQUE NOT NULL,
+  phone VARCHAR(20),
+  password_hash VARCHAR(255) NOT NULL,
+  locker_station_id VARCHAR(50) REFERENCES locker_stations(id) ON DELETE SET NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  last_login_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_operators_email ON operators(email);
+CREATE INDEX IF NOT EXISTS idx_operators_station ON operators(locker_station_id);

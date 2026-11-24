@@ -30,3 +30,8 @@ VALUES
   ('CMH-01', '15', 'large', 'available'),
   ('CMH-01', '16', 'large', 'available')
 ON CONFLICT (station_id, box_number) DO NOTHING;
+
+-- Insert Default Operator: Elena Rostova
+INSERT INTO operators (name, email, phone, password_hash, status)
+VALUES ('Elena Rostova', 'elena@smartlocker.ph', '+639195553322', 'operator123', 'active')
+ON CONFLICT (email) DO NOTHING;
