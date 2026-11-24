@@ -75,6 +75,7 @@ export async function markCompartmentAvailable(stationId, boxNumber) {
 
 // Fetches live full compartment status and active order details for Operator telemetry
 export async function getStationCompartments(stationId) {
+  const normStationId = String(stationId).trim().toUpperCase();
   const sql = `
     SELECT 
       c.box_number,
@@ -91,7 +92,42 @@ export async function getStationCompartments(stationId) {
     WHERE c.station_id = $1
     ORDER BY c.box_number ASC;
   `;
-  const result = await query(sql, [stationId]);
+  let result = await query(sql, [normStationId]);
+
+  // Check if station has total_compartments defined in locker_stations
+  try {
+    const stationQuery = await query('SELECT total_compartments FROM locker_stations WHERE id = $1', [normStationId]);
+    if (stationQuery.rows && stationQuery.rows[0]) {
+      const configuredDoors = Number(stationQuery.rows[0].total_compartments) || 16;
+
+      // If no compartment rows exist yet, populate configuredDoors compartments
+      if (!result.rows || result.rows.length === 0) {
+        for (let i = 1; i <= configuredDoors; i++) {
+          const boxNum = i < 10 ? `0${i}` : `${i}`;
+          let size = 'medium';
+          if (i <= 4) size = 'small';
+          else if (i > 12) size = 'large';
+          await query(
+            `INSERT INTO locker_compartments (station_id, box_number, size, status, updated_at)
+             VALUES ($1, $2, $3, 'available', CURRENT_TIMESTAMP)
+             ON CONFLICT (station_id, box_number) DO NOTHING;`,
+            [normStationId, boxNum, size]
+          );
+        }
+        result = await query(sql, [normStationId]);
+      } else if (result.rows.length > configuredDoors) {
+        // If extra empty compartments exist beyond configured capacity, remove them
+        await query(
+          `DELETE FROM locker_compartments WHERE station_id = $1 AND CAST(box_number AS INT) > $2 AND current_order_id IS NULL`,
+          [normStationId, configuredDoors]
+        );
+        result = await query(sql, [normStationId]);
+      }
+    }
+  } catch (err) {
+    console.warn('[LockerService] getStationCompartments sync warning:', err.message);
+  }
+
   return result.rows;
 }
 
@@ -256,8 +292,12 @@ export async function confirmStationPairing(stationId, pairingCode) {
     `;
     const res = await query(sql, [normStationId]);
 
-    // Ensure 16 compartments exist for the newly bound station
-    for (let i = 1; i <= 16; i++) {
+    // Ensure compartments exist for the newly bound station according to its configured capacity
+    const totalComps = (res.rows && res.rows[0] && res.rows[0].total_compartments)
+      ? Number(res.rows[0].total_compartments)
+      : 16;
+
+    for (let i = 1; i <= totalComps; i++) {
       const boxNum = i < 10 ? `0${i}` : `${i}`;
       let size = 'medium';
       if (i <= 4) size = 'small';
