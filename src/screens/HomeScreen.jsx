@@ -19,7 +19,10 @@ export function HomeScreen(props) {
   const stationId = props.stationId || ENV.stationId;
   const hardwareId = props.hardwareId || 'SLL-12901';
   const isStationFull = Boolean(props.isStationFull);
-  const isUnprovisioned = !stationId || stationId === 'SETUP REQUIRED';
+  const isStationBound = Boolean(props.isStationBound);
+  const isConfigured = Boolean(stationId && stationId !== 'SETUP REQUIRED');
+  const isReady = isConfigured && isStationBound;
+  const isUnprovisioned = !isReady;
 
   const [currentTime, setCurrentTime] = useState('');
   const [adminTapCount, setAdminTapCount] = useState(0);
@@ -63,6 +66,14 @@ export function HomeScreen(props) {
 
   function handleDropoffPress() {
     if (isUnprovisioned) {
+      if (!isStationBound && isConfigured) {
+        Alert.alert(
+          'Remote Pairing Required',
+          `Station ${stationId} is set up locally but has not been paired by Central Management yet. Please complete pairing in the Operator Dashboard.`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
       Alert.alert(
         'Machine Setup Required',
         'This locker station has not been provisioned yet. Please contact a technician or tap "Open Setup" to configure.',
@@ -98,9 +109,16 @@ export function HomeScreen(props) {
         >
           <Text style={styles.brandName}>Smart Locker</Text>
           <Text style={styles.stationDivider}>/</Text>
-          {isUnprovisioned ? (
+          {!isConfigured ? (
             <View style={styles.unprovisionedBadge}>
               <Text style={styles.unprovisionedBadgeText}>SETUP REQUIRED</Text>
+            </View>
+          ) : !isStationBound ? (
+            <View style={styles.stationGroup}>
+              <Text style={styles.stationCode}>{stationId}</Text>
+              <View style={[styles.unprovisionedBadge, { backgroundColor: '#fef3c7' }]}>
+                <Text style={[styles.unprovisionedBadgeText, { color: '#b45309' }]}>UNBOUND</Text>
+              </View>
             </View>
           ) : (
             <Text style={styles.stationCode}>{stationId}</Text>
@@ -140,9 +158,13 @@ export function HomeScreen(props) {
             <View style={styles.btnTextCol}>
               <View style={styles.titleRow}>
                 <Text style={styles.dropoffTitle}>Drop Off</Text>
-                {isUnprovisioned ? (
+                {!isConfigured ? (
                   <View style={styles.setupRequiredActionBadge}>
                     <Text style={styles.setupRequiredActionBadgeText}>SETUP REQUIRED</Text>
+                  </View>
+                ) : !isStationBound ? (
+                  <View style={[styles.setupRequiredActionBadge, { backgroundColor: '#fef3c7' }]}>
+                    <Text style={[styles.setupRequiredActionBadgeText, { color: '#b45309' }]}>PAIRING REQUIRED</Text>
                   </View>
                 ) : isStationFull ? (
                   <View style={styles.fullBadge}>
@@ -151,8 +173,10 @@ export function HomeScreen(props) {
                 ) : null}
               </View>
               <Text style={[styles.dropoffSubtitle, (isStationFull || isUnprovisioned) && styles.dropoffSubtitleDisabled]}>
-                {isUnprovisioned
+                {!isConfigured
                   ? 'Machine setup required by technician'
+                  : !isStationBound
+                  ? 'Awaiting Central Operator remote pairing'
                   : isStationFull
                   ? 'All compartments currently occupied'
                   : 'Leave clothes for wash & fold'}

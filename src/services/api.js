@@ -325,6 +325,7 @@ export async function pollPairingStatus(stationId) {
 
     if (response.ok) {
       const result = await response.json();
+      const realDoors = Number(result.totalDoors || result.total_compartments) || 4;
       return {
         success: true,
         stationId: result.stationId,
@@ -332,6 +333,9 @@ export async function pollPairingStatus(stationId) {
         pairingCode: result.pairingCode,
         stationName: result.stationName,
         address: result.address,
+        totalDoors: realDoors,
+        total_compartments: realDoors,
+        exists: result.exists !== false,
         operatorName: result.operatorName || result.operator_name || null,
       };
     }

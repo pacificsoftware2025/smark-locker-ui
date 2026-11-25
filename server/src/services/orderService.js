@@ -241,15 +241,31 @@ export async function getOrderById(orderId) {
   return result.rows[0] || null;
 }
 
-// Lists all orders with optional status filter for Operator Dashboard
-export async function listOrders(statusFilter) {
-  let sql = 'SELECT * FROM orders';
+// Lists orders with optional status and multi-tenant operator filter
+export async function listOrders(statusFilter, operatorId) {
+  let sql = `
+    SELECT o.* 
+    FROM orders o
+    JOIN locker_stations s ON s.id = o.station_id
+  `;
+  const conditions = [];
   const params = [];
-  if (statusFilter) {
-    sql += ' WHERE status = $1';
-    params.push(statusFilter);
+
+  if (operatorId) {
+    params.push(Number(operatorId));
+    conditions.push(`s.operator_id = $${params.length}`);
   }
-  sql += ' ORDER BY created_at DESC LIMIT 50;';
+
+  if (statusFilter) {
+    params.push(statusFilter);
+    conditions.push(`o.status = $${params.length}`);
+  }
+
+  if (conditions.length > 0) {
+    sql += ' WHERE ' + conditions.join(' AND ');
+  }
+
+  sql += ' ORDER BY o.created_at DESC LIMIT 100;';
   const result = await query(sql, params);
   return result.rows;
 }

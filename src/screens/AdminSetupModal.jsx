@@ -77,32 +77,68 @@ export function AdminSetupModal(props) {
   });
   const [boundOperatorName, setBoundOperatorName] = useState(currentConfig.operatorName || 'Carlos Test');
 
-  // Verify live cloud binding status & assigned operator
+  // Verify live cloud binding status & assigned operator whenever modal opens or stationId/config updates
   useEffect(() => {
-    if (!stationId || stationId === 'SETUP REQUIRED') {
-      setIsStationBound(false);
-      return;
+    if (!visible) return;
+
+    const activeId = (currentConfig.stationId && currentConfig.stationId !== 'SETUP REQUIRED')
+      ? currentConfig.stationId
+      : stationId;
+
+    if (activeId && activeId !== 'SETUP REQUIRED') {
+      setStationId(activeId);
     }
-    let isMounted = true;
-    pollPairingStatus(stationId)
-      .then((res) => {
-        if (!isMounted) return;
-        if (res && res.success) {
-          if (res.bindingStatus === 'BOUND_ACTIVE') {
-            setIsStationBound(true);
-            if (res.operatorName) {
-              setBoundOperatorName(res.operatorName);
+
+    if (
+      currentConfig.stationName &&
+      currentConfig.stationName !== 'Unprovisioned Station' &&
+      currentConfig.stationName !== 'Unprovisioned Locker Station'
+    ) {
+      setStationName(currentConfig.stationName);
+    }
+    if (currentConfig.totalDoors) {
+      setTotalDoors(Number(currentConfig.totalDoors));
+    }
+    if (currentConfig.locationTag) {
+      setLocationTag(currentConfig.locationTag);
+    }
+    if (currentConfig.doorSizes) {
+      setDoorSizes(currentConfig.doorSizes);
+    }
+
+    // Default optimistic binding status
+    if (currentConfig.bindingStatus === 'BOUND_ACTIVE' || (activeId && activeId !== 'SETUP REQUIRED')) {
+      setIsStationBound(true);
+    }
+    if (currentConfig.operatorName) {
+      setBoundOperatorName(currentConfig.operatorName);
+    }
+
+    // Query live cloud pairing status from database
+    if (activeId && activeId !== 'SETUP REQUIRED') {
+      let isMounted = true;
+      pollPairingStatus(activeId)
+        .then((res) => {
+          if (!isMounted) return;
+          if (res && res.success) {
+            if (res.bindingStatus === 'BOUND_ACTIVE') {
+              setIsStationBound(true);
+              if (res.operatorName) {
+                setBoundOperatorName(res.operatorName);
+              }
+            } else if (res.bindingStatus === 'UNBOUND' || res.bindingStatus === 'UNREGISTERED') {
+              setIsStationBound(false);
             }
-          } else {
-            setIsStationBound(false);
           }
-        }
-      })
-      .catch(() => {});
-    return () => {
-      isMounted = false;
-    };
-  }, [stationId]);
+        })
+        .catch(() => {});
+      return () => {
+        isMounted = false;
+      };
+    } else {
+      setIsStationBound(false);
+    }
+  }, [visible, currentConfig, stationId]);
 
   // Per-Compartment Door Sizes: doorNumber -> 'small' | 'medium' | 'large'
   const [doorSizes, setDoorSizes] = useState(function() {
@@ -220,6 +256,8 @@ export function AdminSetupModal(props) {
       totalDoors: Number(totalDoors),
       locationTag: locationTag.trim(),
       doorSizes: doorSizes,
+      bindingStatus: isStationBound ? 'BOUND_ACTIVE' : 'UNBOUND',
+      operatorName: boundOperatorName || null,
     };
 
     LoggerService.addLog(

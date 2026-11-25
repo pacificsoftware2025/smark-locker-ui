@@ -22,6 +22,7 @@ export function IncomingPairingModal(props) {
   const address = requestData.address || 'Assigned Location';
   const stationId = requestData.stationId || 'SLL-12901';
   const pairingCode = requestData.pairingCode || '849201';
+  const totalDoors = Number(requestData.totalDoors || requestData.total_compartments || 4);
 
   return (
     <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={onDecline}>
@@ -59,7 +60,7 @@ export function IncomingPairingModal(props) {
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Capacity Configuration:</Text>
-              <Text style={styles.detailValue}>16 Compartment Doors</Text>
+              <Text style={styles.detailValue}>{totalDoors} Compartment Doors</Text>
             </View>
 
             <View style={styles.codeBox}>

@@ -138,15 +138,16 @@ export async function syncStationSettings({ stationId, stationName, locationTag,
   const normAddress = String(locationTag || 'Main Entrance').trim();
   const normDoors = Number(totalDoors) || 16;
 
-  // 1. Upsert locker_stations table
+  // 1. Upsert locker_stations table (new stations start as UNBOUND until paired by Operator)
   const stationSql = `
-    INSERT INTO locker_stations (id, name, address, total_compartments, status, updated_at)
-    VALUES ($1, $2, $3, $4, 'online', CURRENT_TIMESTAMP)
+    INSERT INTO locker_stations (id, name, address, total_compartments, status, binding_status, updated_at)
+    VALUES ($1, $2, $3, $4, 'online', 'UNBOUND', CURRENT_TIMESTAMP)
     ON CONFLICT (id) DO UPDATE SET
       name = EXCLUDED.name,
       address = EXCLUDED.address,
       total_compartments = EXCLUDED.total_compartments,
       status = 'online',
+      binding_status = COALESCE(locker_stations.binding_status, 'UNBOUND'),
       updated_at = CURRENT_TIMESTAMP
     RETURNING *;
   `;
@@ -184,7 +185,7 @@ export async function syncStationSettings({ stationId, stationName, locationTag,
 // ==============================================================================
 
 // 1. Operator requests remote pairing from web dashboard to physical kiosk
-export async function requestStationPairing({ stationId, stationName, address, branchTag }) {
+export async function requestStationPairing({ stationId, stationName, address, branchTag, totalDoors, operatorId, operatorName }) {
   if (!stationId) {
     const err = new Error('Machine stationId is required for binding request.');
     err.statusCode = 400;
@@ -201,8 +202,31 @@ export async function requestStationPairing({ stationId, stationName, address, b
   const displayName = String(stationName || `Station ${normStationId}`).trim();
   const displayAddress = String(address || branchTag || 'Provisioned Branch Location').trim();
 
+  // Multi-tenant check: Check if station is already bound to a different operator
+  try {
+    const existingCheck = await query(
+      'SELECT id, binding_status, operator_id FROM locker_stations WHERE id = $1',
+      [normStationId]
+    );
+    if (existingCheck.rows && existingCheck.rows.length > 0) {
+      const existing = existingCheck.rows[0];
+      if (
+        existing.binding_status === 'BOUND_ACTIVE' &&
+        existing.operator_id &&
+        operatorId &&
+        Number(existing.operator_id) !== Number(operatorId)
+      ) {
+        const err = new Error(`Station ${normStationId} is already bound to another operator.`);
+        err.statusCode = 403;
+        throw err;
+      }
+    }
+  } catch (err) {
+    if (err.statusCode) throw err;
+  }
+
   // Detect real capacity if kiosk already created compartments or station exists
-  let initialDoors = 16;
+  let initialDoors = Number(totalDoors) || 4;
   try {
     const compCountRes = await query(
       'SELECT COUNT(*) FROM locker_compartments WHERE station_id = $1',
@@ -212,34 +236,36 @@ export async function requestStationPairing({ stationId, stationName, address, b
       initialDoors = Number(compCountRes.rows[0].count);
     }
   } catch (err) {
-    // fallback to 16
+    // fallback
   }
 
   // Generate 6-digit pairing verification code
   const pairingCode = String(Math.floor(100000 + Math.random() * 900000));
+  const validOperatorId = operatorId ? Number(operatorId) : null;
 
   const sql = `
     INSERT INTO locker_stations (
-      id, name, address, total_compartments, status, binding_status, pairing_code, pairing_requested_at, created_at, updated_at
+      id, name, address, total_compartments, status, binding_status, pairing_code, operator_id, pairing_requested_at, created_at, updated_at
     )
-    VALUES ($1, $2, $3, $4, 'online', 'PENDING_CONFIRMATION', $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    VALUES ($1, $2, $3, $4, 'online', 'PENDING_CONFIRMATION', $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     ON CONFLICT (id) DO UPDATE SET
       name = EXCLUDED.name,
       address = EXCLUDED.address,
       total_compartments = CASE 
-        WHEN locker_stations.total_compartments IS NOT NULL AND locker_stations.total_compartments != 16 
-        THEN locker_stations.total_compartments 
-        ELSE EXCLUDED.total_compartments 
+        WHEN EXCLUDED.total_compartments IS NOT NULL THEN EXCLUDED.total_compartments
+        WHEN locker_stations.total_compartments IS NOT NULL THEN locker_stations.total_compartments
+        ELSE 4
       END,
       binding_status = 'PENDING_CONFIRMATION',
       pairing_code = EXCLUDED.pairing_code,
+      operator_id = COALESCE(EXCLUDED.operator_id, locker_stations.operator_id),
       pairing_requested_at = CURRENT_TIMESTAMP,
       updated_at = CURRENT_TIMESTAMP
     RETURNING *;
   `;
 
   try {
-    const res = await query(sql, [normStationId, displayName, displayAddress, initialDoors, pairingCode]);
+    const res = await query(sql, [normStationId, displayName, displayAddress, initialDoors, pairingCode, validOperatorId]);
     if (res.rows && res.rows[0]) {
       return res.rows[0];
     }
@@ -267,10 +293,10 @@ export async function getStationPairingStatus(stationId) {
 
   try {
     const sql = `
-      SELECT s.id, s.name, s.address, s.total_compartments, s.status, s.binding_status, s.pairing_code, s.pairing_requested_at, s.updated_at,
-             COALESCE(o.name, (SELECT name FROM operators WHERE locker_station_id = s.id OR id = 1 LIMIT 1), 'Carlos Test') AS operator_name
+      SELECT s.id, s.name, s.address, s.total_compartments, s.status, s.binding_status, s.operator_id, s.pairing_code, s.pairing_requested_at, s.updated_at,
+             COALESCE(o.name, 'Carlos Test') AS operator_name
       FROM locker_stations s
-      LEFT JOIN operators o ON o.locker_station_id = s.id
+      LEFT JOIN operators o ON o.id = s.operator_id
       WHERE s.id = $1;
     `;
     const res = await query(sql, [normStationId]);
@@ -348,14 +374,37 @@ export async function confirmStationPairing(stationId, pairingCode) {
 }
 
 // 4. Returns all registered fleet locker stations for Operator views
-export async function getAllLockerStations() {
+// Multi-tenant: Only returns BOUND ACTIVE stations; if operatorId is provided, filters strictly to that operator.
+export async function getAllLockerStations(operatorId) {
   try {
-    const sql = `
-      SELECT id, name, address, total_compartments, status, binding_status, pairing_code, pairing_requested_at, created_at, updated_at
-      FROM locker_stations
-      ORDER BY updated_at DESC;
-    `;
-    const res = await query(sql, []);
+    let sql;
+    let params;
+
+    if (operatorId) {
+      sql = `
+        SELECT s.id, s.name, s.address, s.total_compartments, s.status, s.binding_status, s.operator_id,
+               COALESCE(o.name, 'Operator') AS operator_name,
+               s.pairing_code, s.pairing_requested_at, s.created_at, s.updated_at
+        FROM locker_stations s
+        LEFT JOIN operators o ON o.id = s.operator_id
+        WHERE s.binding_status = 'BOUND_ACTIVE' AND s.operator_id = $1
+        ORDER BY s.updated_at DESC;
+      `;
+      params = [Number(operatorId)];
+    } else {
+      sql = `
+        SELECT s.id, s.name, s.address, s.total_compartments, s.status, s.binding_status, s.operator_id,
+               COALESCE(o.name, 'Operator') AS operator_name,
+               s.pairing_code, s.pairing_requested_at, s.created_at, s.updated_at
+        FROM locker_stations s
+        LEFT JOIN operators o ON o.id = s.operator_id
+        WHERE s.binding_status = 'BOUND_ACTIVE'
+        ORDER BY s.updated_at DESC;
+      `;
+      params = [];
+    }
+
+    const res = await query(sql, params);
     if (res.rows) {
       return res.rows;
     }

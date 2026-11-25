@@ -7,7 +7,8 @@ import * as lockerService from '../services/lockerService.js';
 // GET /api/stations (Fleet stations list for dashboard)
 export async function handleGetAllStations(req, res, next) {
   try {
-    const stations = await lockerService.getAllLockerStations();
+    const operatorId = req.query.operatorId || req.query.operator_id || null;
+    const stations = await lockerService.getAllLockerStations(operatorId);
     return res.status(200).json({
       success: true,
       stations: stations,
@@ -29,7 +30,7 @@ function isValidMachineId(id) {
 // POST /api/stations/pair-request (Operator initiates remote pairing)
 export async function handlePairRequest(req, res, next) {
   try {
-    const { stationId, stationName, address, branchTag } = req.body;
+    const { stationId, stationName, address, branchTag, totalDoors, operatorId, operatorName } = req.body;
 
     if (!stationId || !isValidMachineId(stationId)) {
       return res.status(400).json({
@@ -43,6 +44,9 @@ export async function handlePairRequest(req, res, next) {
       stationName,
       address,
       branchTag,
+      totalDoors,
+      operatorId,
+      operatorName,
     });
 
     return res.status(200).json({

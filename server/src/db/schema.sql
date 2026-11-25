@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS locker_stations (
   address TEXT,
   total_compartments INT DEFAULT 16,
   status VARCHAR(20) DEFAULT 'online',           -- 'online', 'offline', 'maintenance'
-  binding_status VARCHAR(30) DEFAULT 'BOUND_ACTIVE', -- 'UNBOUND', 'PENDING_CONFIRMATION', 'BOUND_ACTIVE'
+  binding_status VARCHAR(30) DEFAULT 'UNBOUND', -- 'UNBOUND', 'PENDING_CONFIRMATION', 'BOUND_ACTIVE'
   pairing_code VARCHAR(10),                      -- 6-digit verification key
   pairing_requested_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -18,9 +18,10 @@ CREATE TABLE IF NOT EXISTS locker_stations (
 );
 
 -- Migration helpers for locker_stations
-ALTER TABLE locker_stations ADD COLUMN IF NOT EXISTS binding_status VARCHAR(30) DEFAULT 'BOUND_ACTIVE';
+ALTER TABLE locker_stations ADD COLUMN IF NOT EXISTS binding_status VARCHAR(30) DEFAULT 'UNBOUND';
 ALTER TABLE locker_stations ADD COLUMN IF NOT EXISTS pairing_code VARCHAR(10);
 ALTER TABLE locker_stations ADD COLUMN IF NOT EXISTS pairing_requested_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE locker_stations ADD COLUMN IF NOT EXISTS operator_id INT REFERENCES operators(id) ON DELETE SET NULL;
 
 -- 2. Locker Compartments (Physical Solenoid Door Slots)
 CREATE TABLE IF NOT EXISTS locker_compartments (

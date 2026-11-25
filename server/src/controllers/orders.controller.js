@@ -123,8 +123,9 @@ export async function handleGetOrder(req, res, next) {
 // GET /api/orders
 export async function handleListOrders(req, res, next) {
   try {
-    const { status } = req.query;
-    const orders = await orderService.listOrders(status);
+    const { status, operatorId, operator_id } = req.query;
+    const opId = operatorId || operator_id || null;
+    const orders = await orderService.listOrders(status, opId);
 
     return res.status(200).json({
       success: true,

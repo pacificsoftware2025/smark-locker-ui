@@ -61,13 +61,55 @@ export function KioskView() {
     async function checkIncomingPairing() {
       try {
         const res = await pollPairingStatus(activeTerminalId);
-        if (isMounted && res && res.success && res.bindingStatus === 'PENDING_CONFIRMATION') {
-          setIncomingPairingRequest({
-            stationId: activeTerminalId,
-            stationName: res.stationName || `Station ${activeTerminalId}`,
-            address: res.address || 'Assigned Branch Location',
-            pairingCode: res.pairingCode || '849201',
-          });
+        if (isMounted && res && res.success) {
+          // 1. If station was completely deleted/truncated from database, reset kiosk
+          if (res.exists === false || res.bindingStatus === 'UNREGISTERED') {
+            if (machineConfig.stationId && machineConfig.stationId !== 'SETUP REQUIRED') {
+              console.log('[KioskView] Station not found in database. Auto-resetting kiosk to SETUP REQUIRED.');
+              const resetConfig = {
+                stationId: 'SETUP REQUIRED',
+                hardwareId: machineConfig.hardwareId || getTerminalHardwareId(),
+                stationName: 'Unprovisioned Station',
+                totalDoors: 16,
+                locationTag: 'Level 1, Main Entrance',
+                doorSizes: null,
+                bindingStatus: 'UNBOUND',
+              };
+              await saveMachineConfig(resetConfig);
+              setMachineConfig(resetConfig);
+              return;
+            }
+          }
+
+          // 2. Synchronize live binding status from PostgreSQL
+          if (res.bindingStatus === 'BOUND_ACTIVE' && machineConfig.bindingStatus !== 'BOUND_ACTIVE') {
+            const updated = {
+              ...machineConfig,
+              bindingStatus: 'BOUND_ACTIVE',
+              operatorName: res.operatorName || 'Carlos Test',
+            };
+            await saveMachineConfig(updated);
+            setMachineConfig(updated);
+          } else if (res.bindingStatus === 'UNBOUND' && machineConfig.bindingStatus === 'BOUND_ACTIVE') {
+            const updated = {
+              ...machineConfig,
+              bindingStatus: 'UNBOUND',
+            };
+            await saveMachineConfig(updated);
+            setMachineConfig(updated);
+          }
+
+          // 3. Incoming pairing request from operator
+          if (res.bindingStatus === 'PENDING_CONFIRMATION') {
+            setIncomingPairingRequest({
+              stationId: activeTerminalId,
+              stationName: res.stationName || `Station ${activeTerminalId}`,
+              address: res.address || 'Assigned Branch Location',
+              pairingCode: res.pairingCode || '849201',
+              totalDoors: res.totalDoors || res.total_compartments || 4,
+              operatorName: res.operatorName || 'Carlos Test',
+            });
+          }
         }
       } catch (err) {
         // Quiet fail on network hiccups
@@ -97,9 +139,11 @@ export function KioskView() {
         stationId: incomingPairingRequest.stationId,
         hardwareId: incomingPairingRequest.stationId,
         stationName: incomingPairingRequest.stationName,
-        totalDoors: 16,
+        totalDoors: Number(incomingPairingRequest.totalDoors) || 4,
         locationTag: incomingPairingRequest.address,
         doorSizes: null,
+        bindingStatus: 'BOUND_ACTIVE',
+        operatorName: incomingPairingRequest.operatorName || 'Carlos Test',
       };
 
       await saveMachineConfig(newConfig);
@@ -324,6 +368,7 @@ export function KioskView() {
             stationId={stationId}
             hardwareId={machineConfig.hardwareId || getTerminalHardwareId()}
             isStationFull={stationAvailability.isStationFull}
+            isStationBound={machineConfig.bindingStatus === 'BOUND_ACTIVE'}
             onStartDropoff={handleStartDropoff}
             onStartPickup={handleStartPickup}
             onOpenAdmin={() => setIsAdminModalVisible(true)}
@@ -345,6 +390,7 @@ export function KioskView() {
             <HomeScreen
               stationId={stationId}
               isStationFull={stationAvailability.isStationFull}
+              isStationBound={machineConfig.bindingStatus === 'BOUND_ACTIVE'}
               onStartDropoff={handleStartDropoff}
               onStartPickup={handleStartPickup}
               onOpenAdmin={() => setIsAdminModalVisible(true)}

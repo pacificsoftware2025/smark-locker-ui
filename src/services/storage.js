@@ -63,6 +63,8 @@ export async function loadMachineConfig() {
             totalDoors: Number(parsed.totalDoors || 16),
             locationTag: parsed.locationTag || 'Level 1, Main Entrance',
             doorSizes: parsed.doorSizes || null,
+            bindingStatus: parsed.bindingStatus || (parsed.stationId && parsed.stationId !== 'SETUP REQUIRED' ? 'BOUND_ACTIVE' : 'UNBOUND'),
+            operatorName: parsed.operatorName || 'Carlos Test',
           };
         }
       }
@@ -92,6 +94,8 @@ export async function saveMachineConfig(config) {
   const totalDoors = Number(config.totalDoors || 16);
   const locationTag = config.locationTag || 'Level 1, Main Entrance';
   const doorSizes = config.doorSizes || null;
+  const bindingStatus = config.bindingStatus || (stationId !== 'SETUP REQUIRED' ? 'BOUND_ACTIVE' : 'UNBOUND');
+  const operatorName = config.operatorName || 'Carlos Test';
 
   // 1. Save to Android Native
   try {
@@ -105,12 +109,12 @@ export async function saveMachineConfig(config) {
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ stationId, stationName, totalDoors, locationTag, doorSizes })
+        JSON.stringify({ stationId, stationName, totalDoors, locationTag, doorSizes, bindingStatus, operatorName })
       );
     }
   } catch (err) {
     console.warn('[Storage] Could not write to localStorage:', err);
   }
 
-  return { stationId, stationName, totalDoors, locationTag, doorSizes };
+  return { stationId, stationName, totalDoors, locationTag, doorSizes, bindingStatus, operatorName };
 }
