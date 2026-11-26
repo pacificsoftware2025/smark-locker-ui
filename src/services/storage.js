@@ -24,56 +24,65 @@ export function getTerminalHardwareId() {
  * Checks localStorage (web) or Android SharedPreferences (native APK).
  */
 export async function loadMachineConfig() {
-  // 1. Try Native Android SharedPreferences first
+  // 1. Try Native Android SharedPreferences first (Native APK on Android tablet)
   try {
     const nativeConfig = await getNativeMachineConfig();
     if (nativeConfig && nativeConfig.stationId) {
       let doorSizes = null;
       let locationTag = 'Level 1, Main Entrance';
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          doorSizes = parsed.doorSizes || null;
-          locationTag = parsed.locationTag || locationTag;
-        }
-      }
       return {
         stationId: nativeConfig.stationId,
         stationName: nativeConfig.stationName || ENV.stationName,
         totalDoors: Number(nativeConfig.totalDoors || 16),
         locationTag: locationTag,
         doorSizes: doorSizes,
+        bindingStatus: nativeConfig.stationId !== 'SETUP REQUIRED' ? 'BOUND_ACTIVE' : 'UNBOUND',
       };
     }
   } catch (err) {
-    console.warn('[Storage] Native config lookup failed:', err);
+    // Native lookup fails gracefully on web
   }
 
-  // 2. Try browser localStorage (Web / Vite preview)
+  // 2. Try browser localStorage (Web / Vite preview / Netlify)
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && parsed.stationId) {
+        if (parsed && parsed.stationId && parsed.stationId !== 'SETUP REQUIRED') {
           return {
             stationId: parsed.stationId,
-            stationName: parsed.stationName || ENV.stationName,
+            hardwareId: parsed.hardwareId || parsed.stationId,
+            stationName: parsed.stationName || 'Grab n Go Bar Kiosk 01',
             totalDoors: Number(parsed.totalDoors || 16),
             locationTag: parsed.locationTag || 'Level 1, Main Entrance',
             doorSizes: parsed.doorSizes || null,
-            bindingStatus: parsed.bindingStatus || (parsed.stationId && parsed.stationId !== 'SETUP REQUIRED' ? 'BOUND_ACTIVE' : 'UNBOUND'),
-            operatorName: parsed.operatorName || 'Carlos Test',
+            bindingStatus: parsed.bindingStatus || 'BOUND_ACTIVE',
+            operatorName: parsed.operatorName || 'Demo Operator',
           };
         }
       }
+
+      // Static machine identity for Web preview / Netlify testing:
+      // Permanently bound so web testers do not need to bind or pair
+      const staticDemo = {
+        stationId: 'SLL-76138',
+        hardwareId: 'SLL-76138',
+        stationName: 'Grab n Go Bar Kiosk 01',
+        totalDoors: 16,
+        locationTag: 'Level 1, Main Entrance',
+        doorSizes: null,
+        bindingStatus: 'BOUND_ACTIVE',
+        operatorName: 'Demo Operator',
+      };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(staticDemo));
+      return staticDemo;
     }
   } catch (err) {
     console.warn('[Storage] localStorage lookup failed:', err);
   }
 
-  // 3. Fallback to .env defaults
+  // 3. Fallback to .env defaults (Native APK fallback when not yet configured)
   const hardwareId = getTerminalHardwareId();
   return {
     stationId: ENV.stationId || 'SETUP REQUIRED',
@@ -82,6 +91,7 @@ export async function loadMachineConfig() {
     totalDoors: 16,
     locationTag: 'Level 1, Main Entrance',
     doorSizes: null,
+    bindingStatus: 'UNBOUND',
   };
 }
 

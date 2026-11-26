@@ -9,6 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { COLORS } from '../theme/colors';
 import { openLockerDoor } from '../native/LockerBridge';
@@ -49,6 +50,9 @@ export function AdminSetupModal(props) {
     totalDoors: 16,
   };
   const onConfigUpdated = props.onConfigUpdated;
+
+  const { width: windowWidth } = useWindowDimensions();
+  const isMobile = windowWidth < 680;
 
   // View state: 'AUTH' | 'SETUP'
   const [viewState, setViewState] = useState('AUTH');
@@ -432,15 +436,23 @@ export function AdminSetupModal(props) {
 
   return (
     <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={[styles.card, viewState === 'AUTH' && styles.cardAuth]}>
-          
+      <View style={[styles.overlay, isMobile && styles.overlayMobile]}>
+        <View
+          style={[
+            styles.card,
+            isMobile && styles.cardMobile,
+            viewState === 'AUTH' && styles.cardAuth,
+            viewState === 'AUTH' && isMobile && styles.cardAuthMobile,
+          ]}
+        >
           {/* ========================================================= */}
           {/* TOP BAR: Title & Close Button                             */}
           {/* ========================================================= */}
-          <View style={styles.topBar}>
+          <View style={[styles.topBar, isMobile && styles.topBarMobile]}>
             <View style={styles.titleGroup}>
-              <Text style={styles.topBarTitle}>Laundry Locker Settings</Text>
+              <Text style={[styles.topBarTitle, isMobile && styles.topBarTitleMobile]}>
+                Laundry Locker Settings
+              </Text>
               <Text style={styles.topBarSub}>Machine Hardware Provisioning</Text>
             </View>
 
@@ -548,101 +560,190 @@ export function AdminSetupModal(props) {
             </View>
           ) : (
             /* ========================================================= */
-            /* VIEW 2: TWO-COLUMN SETTINGS (LEFT NAVBAR + RIGHT CONTENT) */
+            /* VIEW 2: TWO-COLUMN / RESPONSIVE SETTINGS PANEL            */
             /* ========================================================= */
-            <View style={styles.mainContainer}>
+            <View style={[styles.mainContainer, isMobile && styles.mainContainerMobile]}>
               
               {/* ------------------------------------------------------- */}
-              {/* LEFT COLUMN: NAVIGATION BAR                            */}
+              {/* NAVIGATION BAR (TABS)                                    */}
               {/* ------------------------------------------------------- */}
-              <View style={styles.leftNavbar}>
-                <View style={styles.navList}>
-                  <TouchableOpacity
-                    style={[
-                      styles.navItem,
-                      activeTab === 'identity' && styles.navItemActive,
-                    ]}
-                    onPress={() => setActiveTab('identity')}
+              {isMobile ? (
+                <View style={styles.mobileNavbar}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.mobileNavScroll}
                   >
-                    <Text
+                    <TouchableOpacity
                       style={[
-                        styles.navItemText,
-                        activeTab === 'identity' && styles.navItemTextActive,
+                        styles.mobileNavItem,
+                        activeTab === 'identity' && styles.mobileNavItemActive,
                       ]}
+                      onPress={() => setActiveTab('identity')}
                     >
-                      Locker Identity
-                    </Text>
-                  </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.mobileNavItemText,
+                          activeTab === 'identity' && styles.mobileNavItemTextActive,
+                        ]}
+                      >
+                        Locker Identity
+                      </Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[
-                      styles.navItem,
-                      activeTab === 'capacity' && styles.navItemActive,
-                    ]}
-                    onPress={() => setActiveTab('capacity')}
-                  >
-                    <Text
+                    <TouchableOpacity
                       style={[
-                        styles.navItemText,
-                        activeTab === 'capacity' && styles.navItemTextActive,
+                        styles.mobileNavItem,
+                        activeTab === 'capacity' && styles.mobileNavItemActive,
                       ]}
+                      onPress={() => setActiveTab('capacity')}
                     >
-                      Capacity & Door Sizes
-                    </Text>
-                  </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.mobileNavItemText,
+                          activeTab === 'capacity' && styles.mobileNavItemTextActive,
+                        ]}
+                      >
+                        Capacity & Doors
+                      </Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[
-                      styles.navItem,
-                      activeTab === 'relays' && styles.navItemActive,
-                    ]}
-                    onPress={() => setActiveTab('relays')}
-                  >
-                    <Text
+                    <TouchableOpacity
                       style={[
-                        styles.navItemText,
-                        activeTab === 'relays' && styles.navItemTextActive,
+                        styles.mobileNavItem,
+                        activeTab === 'relays' && styles.mobileNavItemActive,
                       ]}
+                      onPress={() => setActiveTab('relays')}
                     >
-                      Relay Diagnostics
-                    </Text>
-                  </TouchableOpacity>
+                      <Text
+                        style={[
+                          styles.mobileNavItemText,
+                          activeTab === 'relays' && styles.mobileNavItemTextActive,
+                        ]}
+                      >
+                        Relay Diagnostics
+                      </Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[
-                      styles.navItem,
-                      activeTab === 'logs' && styles.navItemActive,
-                    ]}
-                    onPress={() => setActiveTab('logs')}
-                  >
-                    <View style={styles.navItemWithBadgeRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.mobileNavItem,
+                        activeTab === 'logs' && styles.mobileNavItemActive,
+                      ]}
+                      onPress={() => setActiveTab('logs')}
+                    >
+                      <View style={styles.navItemWithBadgeRow}>
+                        <Text
+                          style={[
+                            styles.mobileNavItemText,
+                            activeTab === 'logs' && styles.mobileNavItemTextActive,
+                          ]}
+                        >
+                          System Logs
+                        </Text>
+                        {errorCount > 0 && (
+                          <View style={styles.navErrorBadge}>
+                            <Text style={styles.navErrorBadgeText}>{errorCount}</Text>
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  </ScrollView>
+                </View>
+              ) : (
+                <View style={styles.leftNavbar}>
+                  <View style={styles.navList}>
+                    <TouchableOpacity
+                      style={[
+                        styles.navItem,
+                        activeTab === 'identity' && styles.navItemActive,
+                      ]}
+                      onPress={() => setActiveTab('identity')}
+                    >
                       <Text
                         style={[
                           styles.navItemText,
-                          activeTab === 'logs' && styles.navItemTextActive,
+                          activeTab === 'identity' && styles.navItemTextActive,
                         ]}
                       >
-                        System & Error Logs
+                        Locker Identity
                       </Text>
-                      {errorCount > 0 && (
-                        <View style={styles.navErrorBadge}>
-                          <Text style={styles.navErrorBadgeText}>{errorCount}</Text>
-                        </View>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                </View>
+                    </TouchableOpacity>
 
-                <View style={styles.sessionCard}>
-                  <Text style={styles.sessionTitle}>Master Session Active</Text>
-                  <Text style={styles.sessionSub}>PIN Authenticated (999999)</Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.navItem,
+                        activeTab === 'capacity' && styles.navItemActive,
+                      ]}
+                      onPress={() => setActiveTab('capacity')}
+                    >
+                      <Text
+                        style={[
+                          styles.navItemText,
+                          activeTab === 'capacity' && styles.navItemTextActive,
+                        ]}
+                      >
+                        Capacity & Door Sizes
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.navItem,
+                        activeTab === 'relays' && styles.navItemActive,
+                      ]}
+                      onPress={() => setActiveTab('relays')}
+                    >
+                      <Text
+                        style={[
+                          styles.navItemText,
+                          activeTab === 'relays' && styles.navItemTextActive,
+                        ]}
+                      >
+                        Relay Diagnostics
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.navItem,
+                        activeTab === 'logs' && styles.navItemActive,
+                      ]}
+                      onPress={() => setActiveTab('logs')}
+                    >
+                      <View style={styles.navItemWithBadgeRow}>
+                        <Text
+                          style={[
+                            styles.navItemText,
+                            activeTab === 'logs' && styles.navItemTextActive,
+                          ]}
+                        >
+                          System & Error Logs
+                        </Text>
+                        {errorCount > 0 && (
+                          <View style={styles.navErrorBadge}>
+                            <Text style={styles.navErrorBadgeText}>{errorCount}</Text>
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.sessionCard}>
+                    <Text style={styles.sessionTitle}>Master Session Active</Text>
+                    <Text style={styles.sessionSub}>PIN Authenticated (999999)</Text>
+                  </View>
                 </View>
-              </View>
+              )}
 
               {/* ------------------------------------------------------- */}
               {/* RIGHT COLUMN: ACTIVE SETTINGS PANEL                    */}
               {/* ------------------------------------------------------- */}
-              <ScrollView style={styles.rightContent} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={[styles.rightContent, isMobile && styles.rightContentMobile]}
+                contentContainerStyle={isMobile ? styles.rightContentScrollMobile : undefined}
+                showsVerticalScrollIndicator={false}
+              >
                 
                 {/* PANEL HEADER */}
                 <View style={styles.panelHeaderRow}>
@@ -1150,10 +1251,11 @@ export function AdminSetupModal(props) {
           {/* BOTTOM BAR: PRIMARY ACTION BUTTON                         */}
           {/* ========================================================= */}
           {viewState === 'SETUP' && (
-            <View style={styles.bottomBar}>
+            <View style={[styles.bottomBar, isMobile && styles.bottomBarMobile]}>
               <TouchableOpacity
                 style={[
                   styles.primarySubmitBtn,
+                  isMobile && styles.primarySubmitBtnMobile,
                   isSavedFeedback && styles.primarySubmitBtnSuccess,
                   isSavingDb && styles.primarySubmitBtnSaving,
                 ]}
@@ -1195,6 +1297,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
+  overlayMobile: {
+    padding: 8,
+  },
   card: {
     width: '100%',
     maxWidth: 920,
@@ -1209,9 +1314,18 @@ const styles = StyleSheet.create({
     elevation: 20,
     flexDirection: 'column',
   },
+  cardMobile: {
+    height: '95%',
+    maxHeight: '95%',
+    borderRadius: 16,
+  },
   cardAuth: {
     maxWidth: 480,
     height: 560,
+  },
+  cardAuthMobile: {
+    height: 'auto',
+    maxHeight: '94%',
   },
   topBar: {
     height: 64,
@@ -1223,6 +1337,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: COLORS.white,
   },
+  topBarMobile: {
+    paddingHorizontal: 14,
+    height: 54,
+  },
   titleGroup: {
     gap: 2,
   },
@@ -1232,6 +1350,9 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: COLORS.slate900,
     letterSpacing: -0.3,
+  },
+  topBarTitleMobile: {
+    fontSize: 15,
   },
   topBarSub: {
     fontFamily: FONT_FAMILY,
@@ -1492,6 +1613,43 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
   },
+  mainContainerMobile: {
+    flexDirection: 'column',
+  },
+  mobileNavbar: {
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.slate200,
+    paddingVertical: 8,
+  },
+  mobileNavScroll: {
+    paddingHorizontal: 12,
+    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  mobileNavItem: {
+    paddingVertical: 7,
+    paddingHorizontal: 13,
+    borderRadius: 10,
+    backgroundColor: COLORS.slate100,
+    borderWidth: 1,
+    borderColor: COLORS.slate200,
+  },
+  mobileNavItemActive: {
+    backgroundColor: COLORS.orangeSubtle,
+    borderColor: COLORS.orangeBorder,
+  },
+  mobileNavItemText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.slate600,
+  },
+  mobileNavItemTextActive: {
+    color: COLORS.orange,
+    fontWeight: '800',
+  },
   leftNavbar: {
     width: 220,
     backgroundColor: COLORS.white,
@@ -1565,6 +1723,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 18,
     backgroundColor: COLORS.white,
+  },
+  rightContentMobile: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  rightContentScrollMobile: {
+    paddingBottom: 24,
   },
   panelHeaderRow: {
     marginBottom: 16,
@@ -2185,6 +2350,10 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.slate100,
     backgroundColor: COLORS.white,
   },
+  bottomBarMobile: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
   primarySubmitBtn: {
     width: '100%',
     height: 48,
@@ -2192,6 +2361,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.orange,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  primarySubmitBtnMobile: {
+    height: 44,
   },
   primarySubmitBtnSuccess: {
     backgroundColor: COLORS.emerald,

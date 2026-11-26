@@ -31,6 +31,7 @@ export function ServicePreferenceModal(props) {
   const stationId = props.stationId || 'SETUP REQUIRED';
   const assignedBox = props.assignedBox || '03';
   const sizeAvailability = props.sizeAvailability || { small: 4, medium: 8, large: 4 };
+  const initialPreferences = props.initialPreferences || {};
 
   // Helper to verify if compartments exist for a size
   function isSizeAvailable(sizeName) {
@@ -39,19 +40,33 @@ export function ServicePreferenceModal(props) {
   }
 
   // Selected Service Options States
-  const [selectedService, setSelectedService] = useState('Wash, Dry & Fold');
+  const [selectedService, setSelectedService] = useState(initialPreferences.serviceTier || 'Wash, Dry & Fold');
   const [selectedSize, setSelectedSize] = useState(function () {
+    if (initialPreferences.serviceSize && isSizeAvailable(initialPreferences.serviceSize)) {
+      return initialPreferences.serviceSize;
+    }
     if (isSizeAvailable('Medium')) return 'Medium';
     if (isSizeAvailable('Small')) return 'Small';
     if (isSizeAvailable('Large')) return 'Large';
     return 'Medium';
   });
-  const [temperature, setTemperature] = useState('Cold'); // 'Cold' | 'Warm'
-  const [fabricSoftener, setFabricSoftener] = useState(true); // true = Yes, false = No
-  const [specialInstructions, setSpecialInstructions] = useState('');
+  const [temperature, setTemperature] = useState(initialPreferences.temperature || 'Cold'); // 'Cold' | 'Warm'
+  const [fabricSoftener, setFabricSoftener] = useState(initialPreferences.fabricSoftener !== undefined ? initialPreferences.fabricSoftener : true); // true = Yes, false = No
+  const [specialInstructions, setSpecialInstructions] = useState(initialPreferences.specialInstructions || '');
   
   // Solenoid door actuation spinner state
   const [isUnlocking, setIsUnlocking] = useState(false);
+
+  // Sync initialPreferences when modal opens/changes
+  useEffect(function () {
+    if (visible && props.initialPreferences) {
+      if (props.initialPreferences.serviceTier) setSelectedService(props.initialPreferences.serviceTier);
+      if (props.initialPreferences.serviceSize) setSelectedSize(props.initialPreferences.serviceSize);
+      if (props.initialPreferences.temperature) setTemperature(props.initialPreferences.temperature);
+      if (props.initialPreferences.fabricSoftener !== undefined) setFabricSoftener(props.initialPreferences.fabricSoftener);
+      if (props.initialPreferences.specialInstructions !== undefined) setSpecialInstructions(props.initialPreferences.specialInstructions);
+    }
+  }, [visible, props.initialPreferences]);
 
   // Auto-switch to an available size if the currently selected size becomes full
   useEffect(function () {
@@ -65,7 +80,7 @@ export function ServicePreferenceModal(props) {
     }
   }, [sizeAvailability]);
 
-  // Triggered when user taps "Save Preference & Unlock Locker"
+  // Triggered when user taps "Continue to Order Summary"
   function handleUnlockPress() {
     if (!isSizeAvailable(selectedSize)) {
       Alert.alert(
@@ -75,8 +90,6 @@ export function ServicePreferenceModal(props) {
       );
       return;
     }
-
-    setIsUnlocking(true);
 
     // Prepare complete order payload
     const orderPreferences = {
@@ -91,11 +104,7 @@ export function ServicePreferenceModal(props) {
       stationId: stationId,
     };
 
-    // Simulate 1.2s hardware relay energize state, then call parent callback
-    setTimeout(function () {
-      setIsUnlocking(false);
-      onSaveAndUnlock(orderPreferences);
-    }, 1200);
+    onSaveAndUnlock(orderPreferences);
   }
 
   return (
@@ -361,20 +370,12 @@ export function ServicePreferenceModal(props) {
             <TouchableOpacity
               activeOpacity={0.85}
               onPress={handleUnlockPress}
-              disabled={isUnlocking}
-              style={[styles.unlockBtn, isUnlocking && styles.unlockBtnDisabled]}
+              style={styles.unlockBtn}
             >
-              {isUnlocking ? (
-                <View style={styles.unlockingRow}>
-                  <ActivityIndicator color={COLORS.white} size="small" />
-                  <Text style={styles.unlockBtnText}>Allocating & Opening Locker...</Text>
-                </View>
-              ) : (
-                <View style={styles.unlockingRow}>
-                  <Text style={styles.unlockBtnText}>Save Preference & Unlock Locker</Text>
-                  <Text style={styles.unlockBtnArrow}>→</Text>
-                </View>
-              )}
+              <View style={styles.unlockingRow}>
+                <Text style={styles.unlockBtnText}>Continue to Order Summary</Text>
+                <Text style={styles.unlockBtnArrow}>→</Text>
+              </View>
             </TouchableOpacity>
           </View>
 

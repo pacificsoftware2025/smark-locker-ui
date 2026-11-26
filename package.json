@@ -5,6 +5,7 @@
   "description": "Smart Locker Kiosk Touchscreen Application built with React Native Bare Workflow",
   "scripts": {
     "web": "vite --config web/vite.config.js",
+    "build:web": "vite build --config web/vite.config.js",
     "start": "react-native start",
     "android": "react-native run-android"
   },

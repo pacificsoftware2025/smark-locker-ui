@@ -1,21 +1,56 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { COLORS, FONTS } from '../theme';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  Platform,
+  Image,
+  ScrollView,
+  SafeAreaView,
+  useWindowDimensions,
+} from 'react-native';
+import { COLORS } from '../theme/colors';
 import { ENV } from '../config/env';
+
+// Official Brand Logo
+import grabNGoLogo from '../assets/images/grabngo_logo.png';
+
+// Step Illustrations (Clean transparent corners)
+import step1DropoffImg from '../assets/images/step1_dropoff.png';
+import step2WashDryImg from '../assets/images/step2_washdry.png';
+import step3PickupImg from '../assets/images/step3_pickup.png';
 
 // ==============================================================================
 // REACT NATIVE COMPONENT: HomeScreen
-// Pure Minimalist Kiosk Screen:
-//   - Generous breathing space & high typography contrast
-//   - Zero emojis, zero feature clutter, zero walls of text
-//   - 2 large, confident, distraction-free touch actions: Drop Off & Pick Up
-//   - Smart capacity detection: Fades Drop Off when all lockers are occupied
-//   - Secret 5-tap Admin Fleet Setup trigger on station title
+// Commercial Self-Service Touchscreen Kiosk Interface:
+//   - Top Bar: Official Grab 'n Go Bar Logo (with secret 5-tap Admin trigger), Live Clock, Station Badge, (i) Info Trigger
+//   - Hero Header: Bold Welcome Title & Subtitle (24/7 badge removed as requested)
+//   - Dual Wide Hero Action Cards: Drop Off (Safety Orange) & Pick Up (Emerald Green)
+//   - "How Does This Work?" 3 Cards:
+//       1. Drop Off Photo (Transparent corners, edge-to-edge fit) + "Drop Off"
+//       2. Wash & Dry Care Photo (Transparent corners, edge-to-edge fit) + "Wash & Dry Care"
+//       3. Pick Up Photo (Transparent corners, edge-to-edge fit) + "Pick Up"
+//   - Footer: Positioned at bottom (page indicator bar removed as requested)
+//   - Typography: Uniform Plus Jakarta Sans matching AdminSetupModal
+//   - Fully responsive across phone, tablet, and commercial kiosk resolutions
+//   - Strictly zero emojis across all UI elements and feedback messages
 // ==============================================================================
+
+const FONT_FAMILY = Platform.select({
+  web: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+  android: 'sans-serif',
+  ios: 'system-ui',
+  default: 'sans-serif',
+});
+
 export function HomeScreen(props) {
   const onStartDropoff = props.onStartDropoff;
   const onStartPickup = props.onStartPickup;
   const onOpenAdmin = props.onOpenAdmin;
+  const onNeedHelp = props.onNeedHelp;
+
   const stationId = props.stationId || ENV.stationId;
   const hardwareId = props.hardwareId || 'SLL-12901';
   const isStationFull = Boolean(props.isStationFull);
@@ -24,10 +59,14 @@ export function HomeScreen(props) {
   const isReady = isConfigured && isStationBound;
   const isUnprovisioned = !isReady;
 
+  const { width: screenWidth } = useWindowDimensions();
+  const isCompact = screenWidth < 540;
+
   const [currentTime, setCurrentTime] = useState('');
   const [adminTapCount, setAdminTapCount] = useState(0);
   const lastTapRef = useRef(0);
 
+  // Live 24/7 Clock Updater
   useEffect(function () {
     function updateClock() {
       const now = new Date();
@@ -42,7 +81,7 @@ export function HomeScreen(props) {
     };
   }, []);
 
-  // Technician gesture on Station Name (1 tap if unprovisioned, 5 taps if active)
+  // Technician Secret Gesture: 1 tap if unprovisioned, 5 taps if active
   function handleSecretAdminTap() {
     if (isUnprovisioned) {
       if (onOpenAdmin) onOpenAdmin();
@@ -64,6 +103,7 @@ export function HomeScreen(props) {
     lastTapRef.current = now;
   }
 
+  // Drop-off validation handler
   function handleDropoffPress() {
     if (isUnprovisioned) {
       if (!isStationBound && isConfigured) {
@@ -92,359 +132,687 @@ export function HomeScreen(props) {
       );
       return;
     }
-    onStartDropoff();
+    if (onStartDropoff) {
+      onStartDropoff();
+    }
+  }
+
+  // Need help / info modal trigger
+  function handleHelpPress() {
+    if (onNeedHelp) {
+      onNeedHelp();
+      return;
+    }
+    Alert.alert(
+      'Kiosk Information & Help',
+      `Welcome to Grab n Go Bar Smart Laundry Locker.\n\n` +
+      `How to use:\n` +
+      `1. Drop Off: Deposit dirty clothes, choose wash preferences, and close the locker door.\n` +
+      `2. Processing: Your clothes are washed, dried, and folded at our central facility.\n` +
+      `3. Pick Up: Tap 'Pick Up' and enter the 6-digit claim PIN received via SMS.\n\n` +
+      `Station ID: ${stationId}\n` +
+      `Need immediate assistance? Call customer support: 0917-888-LOCK.`,
+      [{ text: 'Close', style: 'cancel' }]
+    );
   }
 
   return (
-    <View style={styles.container}>
-      
-      {/* ------------------------------------------------------------- */}
-      {/* 1. QUIET MINIMAL TOP BAR                                      */}
-      {/* ------------------------------------------------------------- */}
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={handleSecretAdminTap}
-          style={styles.stationGroup}
-        >
-          <Text style={styles.brandName}>Smart Locker</Text>
-          <Text style={styles.stationDivider}>/</Text>
-          {!isConfigured ? (
-            <View style={styles.unprovisionedBadge}>
-              <Text style={styles.unprovisionedBadgeText}>SETUP REQUIRED</Text>
-            </View>
-          ) : !isStationBound ? (
-            <View style={styles.stationGroup}>
-              <Text style={styles.stationCode}>{stationId}</Text>
-              <View style={[styles.unprovisionedBadge, { backgroundColor: '#fef3c7' }]}>
-                <Text style={[styles.unprovisionedBadgeText, { color: '#b45309' }]}>UNBOUND</Text>
-              </View>
-            </View>
-          ) : (
-            <Text style={styles.stationCode}>{stationId}</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.statusGroup}>
-          <View style={styles.liveDot} />
-          <Text style={styles.clockText}>{currentTime || '09:41'}</Text>
-        </View>
-      </View>
-
-      {/* ------------------------------------------------------------- */}
-      {/* 2. CENTER CONTENT: MINIMALIST DISPLAY & 2 TOUCH ACTIONS       */}
-      {/* ------------------------------------------------------------- */}
-      <View style={styles.centerContent}>
-        
-        {/* Clean Headline */}
-        <View style={styles.headingBlock}>
-          <Text style={styles.headline}>
-            Clean laundry,{'\n'}made simple.
-          </Text>
-          <Text style={styles.subline}>
-            Tap an option below to begin.
-          </Text>
-        </View>
-
-        {/* 2 Focused Minimalist Buttons */}
-        <View style={styles.actionsContainer}>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isCompact && styles.scrollContentCompact,
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ------------------------------------------------------------- */}
+        {/* 1. TOP BAR: Official Logo, Clock, Station ID, Info Button     */}
+        {/* ------------------------------------------------------------- */}
+        <View style={styles.topBar}>
           
-          {/* Button 1: Drop Off (Safety Orange #ea580c, or Faded Slate if Full/Unprovisioned) */}
+          {/* Brand Header with Official Logo (Secret 5-Tap Admin Trigger) */}
           <TouchableOpacity
-            activeOpacity={isStationFull || isUnprovisioned ? 0.7 : 0.85}
-            onPress={handleDropoffPress}
-            style={[styles.dropoffBtn, (isStationFull || isUnprovisioned) && styles.dropoffBtnDisabled]}
+            activeOpacity={0.8}
+            onPress={handleSecretAdminTap}
+            style={styles.brandContainer}
+            accessibilityLabel="Grab n Go Bar"
           >
-            <View style={styles.btnTextCol}>
-              <View style={styles.titleRow}>
-                <Text style={styles.dropoffTitle}>Drop Off</Text>
-                {!isConfigured ? (
-                  <View style={styles.setupRequiredActionBadge}>
-                    <Text style={styles.setupRequiredActionBadgeText}>SETUP REQUIRED</Text>
+            <Image
+              source={grabNGoLogo}
+              style={[styles.brandLogoImage, isCompact && styles.brandLogoImageCompact]}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+
+          {/* Top Right Controls: Clock, Station ID, Info Button */}
+          <View style={styles.topRightControls}>
+            <Text style={styles.clockText}>{currentTime || '12:35 PM'}</Text>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleSecretAdminTap}
+              style={styles.stationBadge}
+            >
+              <View style={[styles.liveDot, isUnprovisioned && styles.liveDotWarning]} />
+              <Text style={styles.stationBadgeText}>
+                {!isConfigured ? 'SETUP' : !isStationBound ? `${stationId} (UNBOUND)` : stationId}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={handleHelpPress}
+              style={styles.infoBtn}
+              accessibilityLabel="Help and information"
+            >
+              <Text style={styles.infoBtnText}>i</Text>
+            </TouchableOpacity>
+          </View>
+
+        </View>
+
+        {/* ------------------------------------------------------------- */}
+        {/* 2. HERO SECTION: Main Headline & Sub-headline                 */}
+        {/* ------------------------------------------------------------- */}
+        <View style={styles.heroSection}>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit={true}
+            style={[styles.headline, isCompact && styles.headlineCompact]}
+          >
+            Welcome! How Can We Help You?
+          </Text>
+
+          <Text style={styles.subHeadline}>
+            Select An Option Below To Get Started
+          </Text>
+        </View>
+
+        {/* ------------------------------------------------------------- */}
+        {/* 3. PRIMARY ACTION CARDS (DROP OFF & PICK UP)                  */}
+        {/* ------------------------------------------------------------- */}
+        <View style={[styles.cardsRow, isCompact && styles.cardsRowCompact]}>
+          
+          {/* CARD 1: DROP OFF LAUNDRY (Safety Orange Theme) */}
+          <TouchableOpacity
+            activeOpacity={isStationFull || isUnprovisioned ? 0.7 : 0.88}
+            onPress={handleDropoffPress}
+            style={[
+              styles.actionCard,
+              styles.dropoffCard,
+              isCompact && styles.actionCardCompact,
+              (isStationFull || isUnprovisioned) && styles.cardDisabled,
+            ]}
+          >
+            {/* Background subtle geometric accents */}
+            <View style={styles.cardAccentCircle} />
+
+            {/* Top Icon Box */}
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.cardIconBox}>
+                <View style={styles.cardIconBasket}>
+                  <View style={styles.cardIconLine} />
+                  <View style={styles.cardIconArrowDown}>
+                    <Text style={styles.cardIconSymbol}>↓</Text>
                   </View>
-                ) : !isStationBound ? (
-                  <View style={[styles.setupRequiredActionBadge, { backgroundColor: '#fef3c7' }]}>
-                    <Text style={[styles.setupRequiredActionBadgeText, { color: '#b45309' }]}>PAIRING REQUIRED</Text>
-                  </View>
-                ) : isStationFull ? (
-                  <View style={styles.fullBadge}>
-                    <Text style={styles.fullBadgeText}>STATION FULL</Text>
-                  </View>
-                ) : null}
+                </View>
               </View>
-              <Text style={[styles.dropoffSubtitle, (isStationFull || isUnprovisioned) && styles.dropoffSubtitleDisabled]}>
-                {!isConfigured
-                  ? 'Machine setup required by technician'
-                  : !isStationBound
-                  ? 'Awaiting Central Operator remote pairing'
+
+              {!isConfigured ? (
+                <View style={styles.badgeSetup}>
+                  <Text style={styles.badgeSetupText}>SETUP REQUIRED</Text>
+                </View>
+              ) : !isStationBound ? (
+                <View style={styles.badgeUnbound}>
+                  <Text style={styles.badgeUnboundText}>UNBOUND</Text>
+                </View>
+              ) : isStationFull ? (
+                <View style={styles.badgeFull}>
+                  <Text style={styles.badgeFullText}>STATION FULL</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Middle Title & Description */}
+            <View style={styles.cardBody}>
+              <Text style={[styles.cardTitle, isCompact && styles.cardTitleCompact]}>
+                Drop Off Laundry
+              </Text>
+              <Text style={styles.cardSubtitle}>
+                {!isReady
+                  ? 'Technician machine setup required before accepting drop-offs.'
                   : isStationFull
-                  ? 'All compartments currently occupied'
-                  : 'Leave clothes for wash & fold'}
+                  ? 'All compartments currently occupied. Please check back later.'
+                  : 'Deposit dirty clothes & set wash preferences today'}
               </Text>
             </View>
-            <Text style={[styles.arrowWhite, (isStationFull || isUnprovisioned) && styles.arrowDisabled]}>→</Text>
+
+            {/* Bottom Floating Arrow Button */}
+            <View style={styles.cardFooter}>
+              <View style={styles.circleArrowBtn}>
+                <Text style={styles.circleArrowSymbol}>›</Text>
+              </View>
+            </View>
           </TouchableOpacity>
 
-          {/* Button 2: Pick Up (Crisp Slate Border) */}
+          {/* CARD 2: PICK UP LAUNDRY (Emerald Green Theme) */}
           <TouchableOpacity
-            activeOpacity={0.85}
+            activeOpacity={0.88}
             onPress={onStartPickup}
-            style={styles.pickupBtn}
+            style={[
+              styles.actionCard,
+              styles.pickupCard,
+              isCompact && styles.actionCardCompact,
+            ]}
           >
-            <View style={styles.btnTextCol}>
-              <Text style={styles.pickupTitle}>Pick Up</Text>
-              <Text style={styles.pickupSubtitle}>Claim clean laundry with PIN</Text>
+            {/* Background subtle geometric accents */}
+            <View style={[styles.cardAccentCircle, styles.pickupAccentCircle]} />
+
+            {/* Top Icon Box */}
+            <View style={styles.cardHeaderRow}>
+              <View style={[styles.cardIconBox, styles.pickupIconBox]}>
+                <View style={styles.cardIconBasket}>
+                  <View style={styles.cardIconLine} />
+                  <View style={styles.cardIconArrowDown}>
+                    <Text style={[styles.cardIconSymbol, styles.pickupIconSymbol]}>↑</Text>
+                  </View>
+                </View>
+              </View>
             </View>
-            <Text style={styles.arrowSlate}>→</Text>
+
+            {/* Middle Title & Description */}
+            <View style={styles.cardBody}>
+              <Text style={[styles.cardTitle, isCompact && styles.cardTitleCompact]}>
+                Pick Up Laundry
+              </Text>
+              <Text style={styles.cardSubtitle}>
+                Claim clean laundry with PIN or QR code receipt
+              </Text>
+            </View>
+
+            {/* Bottom Floating Arrow Button */}
+            <View style={styles.cardFooter}>
+              <View style={[styles.circleArrowBtn, styles.pickupCircleArrow]}>
+                <Text style={[styles.circleArrowSymbol, styles.pickupCircleArrowSymbol]}>›</Text>
+              </View>
+            </View>
           </TouchableOpacity>
 
         </View>
 
-      </View>
+        {/* ------------------------------------------------------------- */}
+        {/* 4. "HOW DOES THIS WORK?" SECTION (CLEAN STEP CARDS)           */}
+        {/* ------------------------------------------------------------- */}
+        <View style={styles.guideSection}>
+          
+          <View style={styles.guideHeader}>
+            <Text style={styles.guideTitle}>How Does This Work?</Text>
+            <Text style={styles.guideSubtitle}>3 Simple Steps To Get Started</Text>
+          </View>
 
-      {/* ------------------------------------------------------------- */}
-      {/* 3. QUIET MINIMAL FOOTER                                       */}
-      {/* ------------------------------------------------------------- */}
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          Contactless 24/7 &bull; {isUnprovisioned ? 'Smartbox Laundry Locker' : stationId}
-        </Text>
-      </View>
+          <View style={[styles.stepsRow, isCompact && styles.stepsRowCompact]}>
+            
+            {/* STEP 1: DROP OFF */}
+            <View style={styles.stepCard}>
+              <View style={styles.stepImageFrame}>
+                <Image
+                  source={step1DropoffImg}
+                  style={styles.stepImage}
+                  resizeMode="cover"
+                />
+              </View>
+              <View style={styles.stepCardFooter}>
+                <Text style={styles.stepCardTitle}>Drop Off</Text>
+              </View>
+            </View>
 
-    </View>
+            {/* STEP 2: WASH & DRY CARE */}
+            <View style={styles.stepCard}>
+              <View style={styles.stepImageFrame}>
+                <Image
+                  source={step2WashDryImg}
+                  style={styles.stepImage}
+                  resizeMode="cover"
+                />
+              </View>
+              <View style={styles.stepCardFooter}>
+                <Text style={styles.stepCardTitle}>Wash & Dry Care</Text>
+              </View>
+            </View>
+
+            {/* STEP 3: PICK UP */}
+            <View style={styles.stepCard}>
+              <View style={styles.stepImageFrame}>
+                <Image
+                  source={step3PickupImg}
+                  style={styles.stepImage}
+                  resizeMode="cover"
+                />
+              </View>
+              <View style={styles.stepCardFooter}>
+                <Text style={styles.stepCardTitle}>Pick Up</Text>
+              </View>
+            </View>
+
+          </View>
+
+        </View>
+
+        {/* ------------------------------------------------------------- */}
+        {/* 5. FOOTER / QUIET STATUS BAR (MOVED DOWN TO BOTTOM)           */}
+        {/* ------------------------------------------------------------- */}
+        <View style={styles.footerBar}>
+          <Text style={styles.footerText}>
+            Grab n Go Bar &bull; Contactless 24/7 Smart Laundry Station
+          </Text>
+        </View>
+
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: '#ffffff',
+  },
+  scrollView: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+  },
+  scrollContent: {
     paddingHorizontal: 28,
-    paddingVertical: 24,
+    paddingTop: 14,
+    paddingBottom: 24,
+    flexGrow: 1,
     justifyContent: 'space-between',
+  },
+  scrollContentCompact: {
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 20,
   },
 
   // -------------------------------------------------------------
-  // TOP BAR
+  // 1. TOP BAR
   // -------------------------------------------------------------
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 8,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
   },
-  stationGroup: {
+  brandContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
+  brandLogoImage: {
+    width: 130,
+    height: 44,
+  },
+  brandLogoImageCompact: {
+    width: 105,
+    height: 36,
+  },
+  topRightControls: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  brandName: {
-    fontFamily: FONTS.family,
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.slate900,
-    letterSpacing: -0.2,
-  },
-  stationDivider: {
-    fontFamily: FONTS.family,
-    fontSize: 14,
-    color: COLORS.slate300,
-  },
-  stationCode: {
-    fontFamily: FONTS.family,
+  clockText: {
+    fontFamily: FONT_FAMILY,
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.slate500,
+    color: '#334155',
   },
-  unprovisionedBadge: {
-    backgroundColor: '#fff7ed', // Amber/Orange-50
-    borderColor: '#ea580c',     // Safety Orange
-    borderWidth: 1.5,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  unprovisionedBadgeText: {
-    fontFamily: FONTS.family,
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#ea580c',
-    letterSpacing: 0.5,
-  },
-  statusGroup: {
+  stationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   liveDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: COLORS.emerald,
+    backgroundColor: '#10b981',
   },
-  clockText: {
-    fontFamily: FONTS.family,
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.slate700,
+  liveDotWarning: {
+    backgroundColor: '#f59e0b',
+  },
+  stationBadgeText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#475569',
+    letterSpacing: 0.3,
+  },
+  infoBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoBtnText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#64748b',
   },
 
   // -------------------------------------------------------------
-  // CENTER CONTENT
+  // 2. HERO SECTION
   // -------------------------------------------------------------
-  centerContent: {
-    gap: 36,
-    paddingVertical: 12,
-  },
-  headingBlock: {
-    gap: 10,
+  heroSection: {
+    gap: 4,
+    paddingTop: 6,
+    paddingBottom: 0,
   },
   headline: {
-    fontFamily: FONTS.family,
-    fontSize: 38,
+    fontFamily: FONT_FAMILY,
+    fontSize: 23,
     fontWeight: '900',
-    color: COLORS.slate900,
-    letterSpacing: -1.2,
-    lineHeight: 44,
+    color: '#0f172a',
+    letterSpacing: -0.6,
   },
-  subline: {
-    fontFamily: FONTS.family,
-    fontSize: 16,
-    color: COLORS.slate500,
+  headlineCompact: {
+    fontSize: 19,
+    letterSpacing: -0.4,
+  },
+  subHeadline: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748b',
   },
 
   // -------------------------------------------------------------
-  // ACTIONS CONTAINER (2 Minimalist Buttons)
+  // 3. PRIMARY ACTION CARDS (EQUAL TOP & BOTTOM MARGINS)
   // -------------------------------------------------------------
-  actionsContainer: {
-    gap: 16,
-  },
-  dropoffBtn: {
-    minHeight: 90,
-    backgroundColor: COLORS.orange,
-    borderRadius: 20,
+  cardsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 16,
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  cardsRowCompact: {
+    gap: 10,
+    marginTop: 14,
+    marginBottom: 14,
+  },
+  actionCard: {
+    flex: 1,
+    minHeight: 180,
+    borderRadius: 22,
+    padding: 20,
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 18,
-    shadowColor: COLORS.orange,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
     elevation: 4,
   },
-  dropoffBtnDisabled: {
-    backgroundColor: '#94a3b8', // Faded slate-400
-    shadowOpacity: 0,
-    elevation: 0,
-    opacity: 0.72,
+  actionCardCompact: {
+    padding: 14,
+    minHeight: 160,
+    borderRadius: 18,
   },
-  titleRow: {
+  dropoffCard: {
+    backgroundColor: '#ea580c', // Safety Orange
+  },
+  pickupCard: {
+    backgroundColor: '#059669', // Emerald Green
+  },
+  cardDisabled: {
+    opacity: 0.65,
+  },
+  cardAccentCircle: {
+    position: 'absolute',
+    top: -40,
+    right: -40,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  pickupAccentCircle: {
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  cardHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  fullBadge: {
-    backgroundColor: '#dc2626', // Red-600 alert badge
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  fullBadgeText: {
-    fontFamily: FONTS.family,
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#ffffff',
-    letterSpacing: 0.8,
-  },
-  setupRequiredActionBadge: {
-    backgroundColor: '#d97706', // Amber-600 alert badge
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  setupRequiredActionBadgeText: {
-    fontFamily: FONTS.family,
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#ffffff',
-    letterSpacing: 0.8,
-  },
-  dropoffSubtitleDisabled: {
-    color: 'rgba(255, 255, 255, 0.85)',
-  },
-  arrowDisabled: {
-    opacity: 0.5,
-  },
-  pickupBtn: {
-    minHeight: 90,
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: COLORS.slate200,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingVertical: 18,
-    shadowColor: COLORS.slate900,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 1,
   },
-  btnTextCol: {
+  cardIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickupIconBox: {
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+  },
+  cardIconBasket: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardIconLine: {
+    width: 14,
+    height: 2,
+    backgroundColor: '#ffffff',
+    borderRadius: 1,
+    marginBottom: 2,
+  },
+  cardIconArrowDown: {
+    alignItems: 'center',
+  },
+  cardIconSymbol: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#ffffff',
+  },
+  pickupIconSymbol: {
+    color: '#ffffff',
+  },
+  badgeFull: {
+    backgroundColor: '#b91c1c',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  badgeFullText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: 0.5,
+  },
+  badgeSetup: {
+    backgroundColor: '#b45309',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  badgeSetupText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#ffffff',
+    letterSpacing: 0.5,
+  },
+  badgeUnbound: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  badgeUnboundText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#b45309',
+    letterSpacing: 0.5,
+  },
+  cardBody: {
     gap: 4,
+    marginVertical: 10,
   },
-  dropoffTitle: {
-    fontFamily: FONTS.family,
+  cardTitle: {
+    fontFamily: FONT_FAMILY,
     fontSize: 22,
     fontWeight: '900',
     color: '#ffffff',
     letterSpacing: -0.4,
   },
-  dropoffSubtitle: {
-    fontFamily: FONTS.family,
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.88)',
+  cardTitleCompact: {
+    fontSize: 17,
   },
-  pickupTitle: {
-    fontFamily: FONTS.family,
-    fontSize: 22,
-    fontWeight: '900',
-    color: COLORS.slate900,
-    letterSpacing: -0.4,
+  cardSubtitle: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: 16,
   },
-  pickupSubtitle: {
-    fontFamily: FONTS.family,
-    fontSize: 13,
-    color: COLORS.slate500,
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
   },
-  arrowWhite: {
-    fontFamily: FONTS.family,
-    fontSize: 24,
+  circleArrowBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  circleArrowSymbol: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 20,
     fontWeight: '700',
     color: '#ffffff',
+    marginTop: -2,
+    marginLeft: 1,
   },
-  arrowSlate: {
-    fontFamily: FONTS.family,
-    fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.slate400,
+  pickupCircleArrow: {
+    backgroundColor: 'rgba(255, 255, 255, 0.28)',
+  },
+  pickupCircleArrowSymbol: {
+    color: '#ffffff',
   },
 
   // -------------------------------------------------------------
-  // FOOTER
+  // 4. "HOW DOES THIS WORK?" SECTION
   // -------------------------------------------------------------
-  footer: {
+  guideSection: {
+    gap: 12,
+    marginTop: 0,
+    paddingTop: 0,
+  },
+  guideHeader: {
+    gap: 2,
+  },
+  guideTitle: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 19,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: -0.4,
+  },
+  guideSubtitle: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  stepsRow: {
+    flexDirection: 'row',
+    gap: 14,
+  },
+  stepsRowCompact: {
+    gap: 8,
+  },
+  stepCard: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
     alignItems: 'center',
-    paddingBottom: 4,
+  },
+  stepImageFrame: {
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#ffffff',
+    overflow: 'hidden',
+    borderTopLeftRadius: 17,
+    borderTopRightRadius: 17,
+    padding: 0,
+  },
+  stepImage: {
+    width: '100%',
+    height: '100%',
+  },
+  stepCardFooter: {
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    width: '100%',
+    borderTopWidth: 1,
+    borderTopColor: '#f8fafc',
+  },
+  stepCardTitle: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+    textAlign: 'center',
+    letterSpacing: -0.2,
+  },
+
+  // -------------------------------------------------------------
+  // 5. FOOTER (POSITIONED AT BOTTOM)
+  // -------------------------------------------------------------
+  footerBar: {
+    alignItems: 'center',
+    paddingTop: 24,
+    paddingBottom: 10,
+    marginTop: 'auto',
   },
   footerText: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 12,
-    color: COLORS.slate400,
-    letterSpacing: 0.5,
+    fontWeight: '600',
+    color: '#94a3b8',
+    letterSpacing: 0.3,
+    textAlign: 'center',
   },
 });

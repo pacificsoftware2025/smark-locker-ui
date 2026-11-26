@@ -3,6 +3,7 @@ import { View, StyleSheet, SafeAreaView, Alert } from 'react-native';
 import { HomeScreen } from './HomeScreen';
 import { ContactDetailsScreen } from './ContactDetailsScreen';
 import { ServicePreferenceModal } from './ServicePreferenceModal';
+import { OrderSummaryScreen } from './OrderSummaryScreen';
 import { DoorOpenScreen } from './DoorOpenScreen';
 import { PickupScreen } from './PickupScreen';
 import { PickupPaymentModal } from './PickupPaymentModal';
@@ -22,12 +23,15 @@ import { ENV } from '../config/env';
 //   HOME -> PICKUP_PIN -> DOOR_OPENED -> HOME
 // ==============================================================================
 export function KioskView() {
+  const isWeb = typeof window !== 'undefined';
+
   // Dynamic Station Profile (persisted across reboots via SharedPreferences/localStorage)
   const [machineConfig, setMachineConfig] = useState({
-    stationId: ENV.stationId || 'SETUP REQUIRED',
-    stationName: ENV.stationName || 'Unprovisioned Locker Station',
+    stationId: isWeb ? 'SLL-76138' : (ENV.stationId || 'SETUP REQUIRED'),
+    stationName: isWeb ? 'Grab n Go Bar Kiosk 01' : (ENV.stationName || 'Unprovisioned Locker Station'),
     totalDoors: 16,
-    hardwareId: getTerminalHardwareId(),
+    hardwareId: isWeb ? 'SLL-76138' : getTerminalHardwareId(),
+    bindingStatus: isWeb ? 'BOUND_ACTIVE' : 'UNBOUND',
   });
 
   const stationId = machineConfig.stationId;
@@ -62,8 +66,8 @@ export function KioskView() {
       try {
         const res = await pollPairingStatus(activeTerminalId);
         if (isMounted && res && res.success) {
-          // 1. If station was completely deleted/truncated from database, reset kiosk
-          if (res.exists === false || res.bindingStatus === 'UNREGISTERED') {
+          // 1. If station was completely deleted/truncated from database, reset kiosk (Native APK only)
+          if ((res.exists === false || res.bindingStatus === 'UNREGISTERED') && !isWeb) {
             if (machineConfig.stationId && machineConfig.stationId !== 'SETUP REQUIRED') {
               console.log('[KioskView] Station not found in database. Auto-resetting kiosk to SETUP REQUIRED.');
               const resetConfig = {
@@ -168,6 +172,7 @@ export function KioskView() {
   // Current screen state
   // In Vanilla JS: let currentStep = 'HOME';
   const [currentStep, setCurrentStep] = useState('HOME');
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
 
   // Cashless QRPH Payment Gate state
   const [isPaymentModalVisible, setIsPaymentModalVisible] = useState(false);
@@ -177,6 +182,8 @@ export function KioskView() {
   const [sessionOrder, setSessionOrder] = useState({
     customerName: '',
     contactNumber: '',
+    email: '',
+    customerEmail: '',
     assignedBox: '03',
     compartmentNumber: '03',
   });
@@ -236,9 +243,12 @@ export function KioskView() {
   // Handler to clear state and return to Home Screen
   function handleResetToHome() {
     setCurrentStep('HOME');
+    setIsSubmittingOrder(false);
     setSessionOrder({
       customerName: '',
       contactNumber: '',
+      email: '',
+      customerEmail: '',
       assignedBox: '03',
       compartmentNumber: '03',
     });
@@ -256,64 +266,102 @@ export function KioskView() {
         ...prev,
         customerName: contactData.customerName,
         contactNumber: contactData.contactNumber,
+        email: contactData.email || '',
+        customerEmail: contactData.customerEmail || contactData.email || '',
       };
     });
     setCurrentStep('DROPOFF_PREFERENCE');
   }
 
-  // 3. Customer taps "Save Preference & Unlock Locker"
-  async function handlePreferenceComplete(orderData) {
-    const requestedBox = orderData.compartmentNumber || orderData.assignedBox || '03';
+  // 3. Customer confirms laundry preferences -> Advance to Order Summary Screen
+  function handlePreferenceComplete(orderPreferences) {
+    setSessionOrder(function (prev) {
+      return {
+        ...prev,
+        serviceTier: orderPreferences.serviceTier,
+        serviceSize: orderPreferences.serviceSize,
+        temperature: orderPreferences.temperature,
+        fabricSoftener: orderPreferences.fabricSoftener,
+        specialInstructions: orderPreferences.specialInstructions,
+        compartmentNumber: orderPreferences.compartmentNumber || prev.compartmentNumber || '03',
+        assignedBox: orderPreferences.assignedBox || prev.assignedBox || '03',
+      };
+    });
+    setCurrentStep('DROPOFF_SUMMARY');
+  }
 
-    // Full customer order payload sent to database
+  // 3B. Customer navigates back to preferences from summary screen
+  function handleBackToPreferences() {
+    setCurrentStep('DROPOFF_PREFERENCE');
+  }
+
+  // 3C. Customer confirms order summary -> Submit order, actuate physical solenoid door, and show DoorOpenScreen
+  async function handleConfirmAndOpenLocker() {
+    if (isSubmittingOrder) return;
+    setIsSubmittingOrder(true);
+
     const customerOrderPayload = {
       customerName: sessionOrder.customerName,
       contactNumber: sessionOrder.contactNumber,
+      email: sessionOrder.email || '',
+      customerEmail: sessionOrder.customerEmail || sessionOrder.email || '',
       stationId: stationId,
-      serviceTier: orderData.serviceTier,
-      serviceSize: orderData.serviceSize,
-      temperature: orderData.temperature,
-      fabricSoftener: orderData.fabricSoftener,
-      specialInstructions: orderData.specialInstructions,
+      serviceTier: sessionOrder.serviceTier,
+      serviceSize: sessionOrder.serviceSize,
+      temperature: sessionOrder.temperature,
+      fabricSoftener: sessionOrder.fabricSoftener,
+      specialInstructions: sessionOrder.specialInstructions,
       createdAt: new Date().toISOString(),
     };
 
     console.log('[KioskView] Submitting Drop-off Order to API:', customerOrderPayload);
 
-    // Call Backend API with automatic dynamic box allocation
-    const apiResponse = await submitDropoffOrder(customerOrderPayload);
-
-    // Fail-safe: If server rejected order (e.g. all lockers full), do NOT open door or advance screen
-    if (!apiResponse || !apiResponse.success) {
-      Alert.alert(
-        'Station Full',
-        apiResponse?.message || 'All locker compartments are currently occupied. Please try again later.',
-        [{ text: 'OK', onPress: handleResetToHome }]
-      );
-      return;
-    }
-
-    const assignedCompartment = apiResponse.compartmentNumber || '01';
-    const boxNumber = parseInt(assignedCompartment, 10);
-    const boardId = 1;
-
     try {
-      // Trigger native Java hardware bridge via React Native NativeModules
-      await openLockerDoor(boardId, boxNumber);
+      // Call Backend API with automatic dynamic box allocation
+      const apiResponse = await submitDropoffOrder(customerOrderPayload);
+
+      // Fail-safe: If server rejected order (e.g. all lockers full), do NOT open door or advance screen
+      if (!apiResponse || !apiResponse.success) {
+        Alert.alert(
+          'Station Full',
+          apiResponse?.message || 'All locker compartments are currently occupied. Please try again later.',
+          [{ text: 'OK', onPress: handleResetToHome }]
+        );
+        return;
+      }
+
+      const assignedCompartment = apiResponse.compartmentNumber || '01';
+      const boxNumber = parseInt(assignedCompartment, 10);
+      const boardId = 1;
+
+      try {
+        // Trigger native Java hardware bridge via React Native NativeModules
+        // Note: openLockerDoor, 9600 baud, /dev/ttyS3, 200ms pulse remain strictly untouched
+        await openLockerDoor(boardId, boxNumber);
+      } catch (err) {
+        console.error('Failed to actuate locker door:', err);
+      }
+
+      setSessionOrder(function (prev) {
+        return {
+          ...prev,
+          orderId: apiResponse?.orderId || 'ORD-NEW',
+          assignedBox: assignedCompartment,
+          compartmentNumber: assignedCompartment,
+        };
+      });
+
+      setCurrentStep('DOOR_OPENED');
     } catch (err) {
-      console.error('Failed to actuate locker door:', err);
+      console.error('[KioskView] Error submitting drop-off order:', err);
+      Alert.alert(
+        'Submission Error',
+        err.message || 'Unable to submit your laundry order. Please check network connection and try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsSubmittingOrder(false);
     }
-
-    setSessionOrder(function (prev) {
-      return {
-        ...prev,
-        orderId: apiResponse?.orderId || 'ORD-NEW',
-        assignedBox: assignedCompartment,
-        compartmentNumber: assignedCompartment,
-      };
-    });
-
-    setCurrentStep('DOOR_OPENED');
   }
 
   // 4. Customer taps "PICKUP LAUNDRY"
@@ -401,12 +449,25 @@ export function KioskView() {
               stationId={stationId}
               assignedBox={sessionOrder.assignedBox || '03'}
               sizeAvailability={stationAvailability.sizeAvailability}
+              initialPreferences={sessionOrder}
               onSaveAndUnlock={handlePreferenceComplete}
             />
           </View>
         )}
 
-        {/* STEP 2C / 3B: DOOR OPENED & DEPOSIT INSTRUCTIONS */}
+        {/* STEP 2C: PRE-UNLOCK ORDER SUMMARY SCREEN */}
+        {currentStep === 'DROPOFF_SUMMARY' && (
+          <OrderSummaryScreen
+            stationId={stationId}
+            orderData={sessionOrder}
+            isSubmitting={isSubmittingOrder}
+            onConfirmAndUnlock={handleConfirmAndOpenLocker}
+            onEditPreferences={handleBackToPreferences}
+            onCancel={handleResetToHome}
+          />
+        )}
+
+        {/* STEP 2D / 3B: DOOR OPENED & DEPOSIT INSTRUCTIONS */}
         {currentStep === 'DOOR_OPENED' && (
           <DoorOpenScreen
             stationId={stationId}
