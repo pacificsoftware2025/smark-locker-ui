@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,14 +12,11 @@ import {
 import { COLORS } from '../theme';
 
 // ==============================================================================
-// REACT NATIVE COMPONENT: ContactDetailsScreen
+// REACT NATIVE COMPONENT: ContactDetailsScreen (GEMINI.md Rules 1, 2, 3 & 4)
 // Step 2A: Customer Intake Form
-//   - Uses uniform Plus Jakarta Sans typography matching AdminSetupModal
-//   - Input 1: Full Name (minimum 2 letters)
-//   - Input 2: Mobile Number (Philippine standard: exactly 11 digits starting with 09)
-//     (SMS NOTIFICATIONS text removed as requested)
-//   - Input 3: Email Address (OPTIONAL) for laundry tracking status
-//   - Scrollable container so software keyboards never obscure inputs or CTAs
+//   - Built with standard beginner-friendly hooks only (useState, useRef, useEffect)
+//   - Grounded with Vanilla JS / DOM comments per GEMINI.md Rule 2
+//   - Large finger-friendly kiosk touch targets per GEMINI.md Rule 1
 //   - Strictly zero emojis across all UI elements and feedback messages
 // ==============================================================================
 
@@ -30,27 +27,108 @@ const FONT_FAMILY = Platform.select({
   default: 'sans-serif',
 });
 
+// `props` works just like function parameters passed from parent KioskView:
+// e.g., function ContactDetailsScreen({ onCancel, onNext, initialData })
 export function ContactDetailsScreen(props) {
   const onCancel = props.onCancel;
   const onNext = props.onNext;
   const initialData = props.initialData || {};
 
-  // Form input states
-  const [name, setName] = useState(initialData.customerName || '');
-  const [phone, setPhone] = useState(initialData.rawPhone || initialData.contactNumber || '');
-  const [email, setEmail] = useState(initialData.email || initialData.customerEmail || '');
-  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  // useState stores form values in memory.
+  // Think of each one like `let name = ''` in Vanilla JS, except calling `setName()`
+  // automatically tells React Native to re-render the screen with the updated text.
+  // Extract the 10-digit local subscriber number if returning from Step 2 (e.g. '+639171234567' -> '9171234567')
+  const initialRawPhone = initialData.rawPhone
+    ? String(initialData.rawPhone).replace(/^\+63/, '')
+    : String(initialData.contactNumber || '').replace(/^\+63/, '');
 
-  // Error validation message
+  const [name, setName] = useState(initialData.customerName || '');
+  const [phone, setPhone] = useState(initialRawPhone);
+  const [phoneWarning, setPhoneWarning] = useState('');
+  const [email, setEmail] = useState(initialData.email || initialData.customerEmail || '');
+  const [isPrivacyChecked, setIsPrivacyChecked] = useState(Boolean(initialData.privacyAccepted));
+  const [showPrivacyTooltip, setShowPrivacyTooltip] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Sanitizes phone number: numbers only, max 11 digits
+  // useRef works like a persistent Vanilla JS variable (`let scrollEl = null` or `let timerId = null`)
+  // that survives screen re-renders without triggering an extra re-render when updated.
+  const scrollViewRef = useRef(null);
+  const tooltipTimerRef = useRef(null);
+
+  // useEffect with `[]` runs cleanup when the user leaves this screen
+  // (like clearing a `setTimeout` on `window.addEventListener('beforeunload', ...)`).
+  useEffect(function () {
+    return function () {
+      if (tooltipTimerRef.current) {
+        clearTimeout(tooltipTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Shows the warning tooltip above the checkbox (like `tooltipEl.style.display = 'flex'` in Vanilla JS)
+  // and scrolls the form down so the user sees it immediately.
+  function showPrivacyWarningTooltip() {
+    setShowPrivacyTooltip(true);
+
+    if (scrollViewRef.current && scrollViewRef.current.scrollToEnd) {
+      scrollViewRef.current.scrollToEnd({ animated: true });
+    }
+
+    if (tooltipTimerRef.current) {
+      clearTimeout(tooltipTimerRef.current);
+    }
+    tooltipTimerRef.current = setTimeout(function () {
+      setShowPrivacyTooltip(false);
+    }, 4500);
+  }
+
+  // Acts like `checkbox.addEventListener('click', ...)` in Vanilla JS
+  function handleTogglePrivacyClick() {
+    const nextCheckedValue = !isPrivacyChecked;
+    setIsPrivacyChecked(nextCheckedValue);
+
+    if (nextCheckedValue && showPrivacyTooltip) {
+      setShowPrivacyTooltip(false);
+      if (tooltipTimerRef.current) {
+        clearTimeout(tooltipTimerRef.current);
+      }
+    }
+  }
+
+  // Opens the Privacy Policy modal when the user taps the "Privacy Policy" link.
+  // `event.stopPropagation()` works just like Vanilla JS DOM events so clicking the link
+  // does not bubble up and accidentally toggle the parent checkbox row.
+  function handleOpenPrivacyModalClick(event) {
+    if (event && typeof event.stopPropagation === 'function') {
+      event.stopPropagation();
+    }
+    setShowPrivacyModal(true);
+  }
+
+  // Marks Privacy Policy as accepted and closes the modal
+  function handleAcceptPrivacyModalClick() {
+    setIsPrivacyChecked(true);
+    setShowPrivacyTooltip(false);
+    if (tooltipTimerRef.current) {
+      clearTimeout(tooltipTimerRef.current);
+    }
+    setShowPrivacyModal(false);
+  }
+
+  // Sanitizes mobile input like `input.value.replace(/\D/g, '')` in Vanilla JS:
+  // Allows up to 10 digits after "+63" and checks immediately if it starts with "9".
   function handlePhoneChange(text) {
     const digitsOnly = text.replace(/\D/g, '');
-    if (digitsOnly.length <= 11) {
+    if (digitsOnly.length <= 10) {
       setPhone(digitsOnly);
       if (errorMessage) {
         setErrorMessage('');
+      }
+      if (digitsOnly.length > 0 && !digitsOnly.startsWith('9')) {
+        setPhoneWarning('Enter a valid mobile number (must start with 9).');
+      } else {
+        setPhoneWarning('');
       }
     }
   }
@@ -69,25 +147,25 @@ export function ContactDetailsScreen(props) {
     }
   }
 
-  // Validates inputs before proceeding
-  function handleProceed() {
+  // Validates form fields before advancing to Step 2 (Service Selection)
+  function handleNextServicesClick() {
     const trimmedName = name.trim();
     const trimmedPhone = phone.trim();
     const trimmedEmail = email.trim();
+
+    if (!isPrivacyChecked) {
+      showPrivacyWarningTooltip();
+    }
 
     if (trimmedName.length < 2) {
       setErrorMessage('Please enter your full name (minimum 2 letters).');
       return;
     }
 
-    // Philippine Standard: exactly 11 digits starting with 09
-    if (trimmedPhone.length !== 11) {
-      setErrorMessage('Please enter a valid 11-digit mobile number (e.g. 0917 123 4567).');
-      return;
-    }
-
-    if (!trimmedPhone.startsWith('09')) {
-      setErrorMessage('Philippine mobile numbers must start with 09 (e.g. 0917 123 4567).');
+    // Philippine +63 Standard: must be exactly 10 digits starting with 9 (e.g. +63 9171234567)
+    if (trimmedPhone.length !== 10 || !trimmedPhone.startsWith('9')) {
+      setPhoneWarning('Enter a valid mobile number.');
+      setErrorMessage('Please enter a valid mobile number (10 digits starting with 9).');
       return;
     }
 
@@ -100,13 +178,23 @@ export function ContactDetailsScreen(props) {
       }
     }
 
-    // Call onNext with validated data
+    // Block advancing if Privacy Policy checklist is unchecked
+    if (!isPrivacyChecked) {
+      setErrorMessage('');
+      return;
+    }
+
+    // Combine "+63" prefix with the 10-digit subscriber number (like `'+63' + trimmedPhone` in Vanilla JS)
+    const formattedE164Phone = '+63' + trimmedPhone;
+
+    // Pass validated customer data up to parent KioskView
     onNext({
       customerName: trimmedName,
-      contactNumber: trimmedPhone, // Standard 11-digit PH mobile number
+      contactNumber: formattedE164Phone,
       rawPhone: trimmedPhone,
       email: trimmedEmail,
       customerEmail: trimmedEmail,
+      privacyAccepted: true,
     });
   }
 
@@ -135,6 +223,7 @@ export function ContactDetailsScreen(props) {
       {/* SCROLLABLE FORM BODY                                          */}
       {/* ------------------------------------------------------------- */}
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scrollArea}
         contentContainerStyle={styles.formCard}
         showsVerticalScrollIndicator={false}
@@ -170,24 +259,33 @@ export function ContactDetailsScreen(props) {
           </View>
         </View>
 
-        {/* 2. Philippine Mobile Number Input (PH Standard: 11 Digits, 09XXXXXXXXX) */}
+        {/* 2. Philippine Mobile Number Input (PH +63 followed by 10 digits starting with 9) */}
         <View style={styles.inputGroup}>
           <Text style={styles.fieldLabel}>MOBILE NUMBER</Text>
-          <View style={styles.fieldBox}>
+          <View
+            style={[
+              styles.fieldBox,
+              phoneWarning !== '' && styles.fieldBoxWarning,
+            ]}
+          >
             <View style={styles.countryCodeBadge}>
-              <Text style={styles.countryPrefix}>PH</Text>
+              <Text style={styles.countryPrefix}>PH +63</Text>
             </View>
             <TextInput
               value={phone}
               onChangeText={handlePhoneChange}
-              placeholder="0917 123 4567"
+              placeholder="917 123 4567"
               placeholderTextColor={COLORS.slate400}
               style={[styles.textInput, styles.phoneInput]}
               keyboardType="number-pad"
-              maxLength={11}
+              maxLength={10}
             />
           </View>
-          <Text style={styles.hintText}>Enter 11 digits starting with 09 (e.g. 0917 123 4567).</Text>
+          {phoneWarning !== '' ? (
+            <Text style={styles.phoneWarningText}>{phoneWarning}</Text>
+          ) : (
+            <Text style={styles.hintText}>Enter 10 digits starting with 9 (e.g. 917 123 4567).</Text>
+          )}
         </View>
 
         {/* 3. Optional Email Input for Laundry Tracking Status */}
@@ -208,26 +306,60 @@ export function ContactDetailsScreen(props) {
           <Text style={styles.hintText}>Optional for laundry tracking status updates.</Text>
         </View>
 
-        {/* 4. Privacy Policy (Content to follow) */}
-        <View style={styles.privacyGroup}>
-          <View style={styles.privacyHeaderRow}>
-            <Text style={styles.fieldLabel}>PRIVACY POLICY</Text>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={function () { setShowPrivacyModal(true); }}
-              style={styles.privacyLinkHit}
-            >
-              <Text style={styles.privacyLinkText}>View details</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={function () { setShowPrivacyModal(true); }}
-            style={styles.privacyBox}
+        {/* 4. Privacy Policy Checklist + Floating Tooltip Warning */}
+        <View style={styles.privacyChecklistWrapper}>
+          {showPrivacyTooltip && !isPrivacyChecked && (
+            <View style={styles.tooltipContainer}>
+              <View style={styles.tooltipBubble}>
+                <View style={styles.tooltipIconBadge}>
+                  <Text style={styles.tooltipIconText}>!</Text>
+                </View>
+                <Text style={styles.tooltipText}>
+                  Please check the Privacy Policy box before proceeding.
+                </Text>
+              </View>
+              <View style={styles.tooltipArrow} />
+            </View>
+          )}
+
+          <View
+            style={[
+              styles.privacyCheckRow,
+              showPrivacyTooltip && !isPrivacyChecked && styles.privacyCheckRowWarning,
+              isPrivacyChecked && styles.privacyCheckRowActive,
+            ]}
           >
-            <Text style={styles.privacyContentText}>Content to follow.</Text>
-          </TouchableOpacity>
-          <Text style={styles.hintText}>By proceeding, you agree to the customer privacy terms.</Text>
+            {/* TouchableOpacity listens for finger taps like element.addEventListener('click', ...) */}
+            {/* hitSlop expands the invisible touch area for easy physical kiosk tapping (Rule 1) */}
+            <TouchableOpacity
+              activeOpacity={0.75}
+              onPress={handleTogglePrivacyClick}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isPrivacyChecked }}
+              style={[
+                styles.checkboxSquare,
+                showPrivacyTooltip && !isPrivacyChecked && styles.checkboxSquareWarning,
+                isPrivacyChecked && styles.checkboxSquareChecked,
+              ]}
+            >
+              {isPrivacyChecked && <View style={styles.checkmarkIcon} />}
+            </TouchableOpacity>
+
+            <Text
+              onPress={handleTogglePrivacyClick}
+              style={styles.privacyCheckLabel}
+            >
+              I have read and agree to the{' '}
+              <Text
+                onPress={handleOpenPrivacyModalClick}
+                style={styles.privacyHighlightText}
+              >
+                Privacy Policy
+              </Text>
+              {' '}and consent to receive locker claim codes and order updates.
+            </Text>
+          </View>
         </View>
 
       </ScrollView>
@@ -246,8 +378,11 @@ export function ContactDetailsScreen(props) {
 
         <TouchableOpacity
           activeOpacity={0.85}
-          onPress={handleProceed}
-          style={styles.nextBtn}
+          onPress={handleNextServicesClick}
+          style={[
+            styles.nextBtn,
+            !isPrivacyChecked && styles.nextBtnUnchecked,
+          ]}
         >
           <Text style={styles.nextBtnText}>Next: Select Services</Text>
           <View style={styles.nextBtnArrowCircle}>
@@ -257,7 +392,7 @@ export function ContactDetailsScreen(props) {
       </View>
 
       {/* ------------------------------------------------------------- */}
-      {/* PRIVACY POLICY MODAL (Content to follow)                      */}
+      {/* PRIVACY POLICY MODAL (Acts like an HTML <dialog> overlay)     */}
       {/* ------------------------------------------------------------- */}
       <Modal
         visible={showPrivacyModal}
@@ -271,6 +406,7 @@ export function ContactDetailsScreen(props) {
               <Text style={styles.modalTitle}>Privacy Policy</Text>
               <TouchableOpacity
                 onPress={function () { setShowPrivacyModal(false); }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={styles.modalCloseBtn}
                 activeOpacity={0.7}
               >
@@ -294,10 +430,10 @@ export function ContactDetailsScreen(props) {
 
             <TouchableOpacity
               activeOpacity={0.85}
-              onPress={function () { setShowPrivacyModal(false); }}
+              onPress={handleAcceptPrivacyModalClick}
               style={styles.modalActionBtn}
             >
-              <Text style={styles.modalActionBtnText}>I Understand</Text>
+              <Text style={styles.modalActionBtnText}>I Understand & Agree</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -430,20 +566,31 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 14,
   },
+  fieldBoxWarning: {
+    borderColor: '#ea580c',
+    backgroundColor: '#fff7ed',
+  },
   countryCodeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingRight: 10,
+    paddingRight: 12,
     marginRight: 10,
     borderRightWidth: 1.5,
     borderRightColor: COLORS.slate200,
   },
   countryPrefix: {
     fontFamily: FONT_FAMILY,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
-    color: COLORS.slate700,
-    letterSpacing: 0.5,
+    color: COLORS.slate800,
+    letterSpacing: 0.3,
+  },
+  phoneWarningText: {
+    fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#ea580c',
+    marginLeft: 4,
   },
   textInput: {
     fontFamily: FONT_FAMILY,
@@ -525,40 +672,123 @@ const styles = StyleSheet.create({
     marginLeft: 1,
     marginTop: -1,
   },
-  privacyGroup: {
-    gap: 6,
-    marginTop: 2,
+  nextBtnUnchecked: {
+    opacity: 0.72,
+    shadowOpacity: 0.1,
   },
-  privacyHeaderRow: {
+  privacyChecklistWrapper: {
+    position: 'relative',
+    marginTop: 4,
+  },
+  tooltipContainer: {
+    marginBottom: 8,
+    alignItems: 'flex-start',
+  },
+  tooltipBubble: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  privacyLinkHit: {
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-  },
-  privacyLinkText: {
-    fontFamily: FONT_FAMILY,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#ea580c',
-    textDecorationLine: 'underline',
-  },
-  privacyBox: {
-    minHeight: 48,
-    backgroundColor: COLORS.slate50,
-    borderWidth: 1.5,
-    borderColor: COLORS.slate200,
-    borderRadius: 14,
+    backgroundColor: '#0f172a',
     paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  tooltipIconBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#ea580c',
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  privacyContentText: {
+  tooltipIconText: {
     fontFamily: FONT_FAMILY,
+    fontSize: 12,
+    fontWeight: '900',
+    color: COLORS.white,
+  },
+  tooltipText: {
+    fontFamily: FONT_FAMILY,
+    flexShrink: 1,
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: COLORS.white,
+    lineHeight: 18,
+  },
+  tooltipArrow: {
+    width: 0,
+    height: 0,
+    marginLeft: 19,
+    borderLeftWidth: 7,
+    borderRightWidth: 7,
+    borderTopWidth: 7,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#0f172a',
+  },
+  privacyCheckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: COLORS.slate200,
+    backgroundColor: COLORS.slate50,
+  },
+  privacyCheckRowWarning: {
+    borderColor: '#ea580c',
+    backgroundColor: '#fff7ed',
+  },
+  privacyCheckRowActive: {
+    borderColor: 'rgba(234, 88, 12, 0.35)',
+    backgroundColor: '#fff7ed',
+  },
+  checkboxSquare: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: COLORS.slate300,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxSquareWarning: {
+    borderColor: '#ea580c',
+  },
+  checkboxSquareChecked: {
+    borderColor: '#ea580c',
+    backgroundColor: '#ea580c',
+  },
+  checkmarkIcon: {
+    width: 11,
+    height: 6,
+    borderLeftWidth: 2.5,
+    borderBottomWidth: 2.5,
+    borderColor: COLORS.white,
+    transform: [{ rotate: '-45deg' }],
+    marginTop: -2,
+  },
+  privacyCheckLabel: {
+    fontFamily: FONT_FAMILY,
+    flex: 1,
     fontSize: 13,
     fontWeight: '600',
-    color: COLORS.slate600,
+    color: COLORS.slate700,
+    lineHeight: 19,
+  },
+  privacyHighlightText: {
+    fontFamily: FONT_FAMILY,
+    fontWeight: '800',
+    color: '#ea580c',
+    textDecorationLine: 'underline',
   },
   modalOverlay: {
     flex: 1,

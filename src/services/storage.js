@@ -43,46 +43,31 @@ export async function loadMachineConfig() {
     // Native lookup fails gracefully on web
   }
 
-  // 2. Try browser localStorage (Web / Vite preview / Netlify)
+  // 2. Try browser localStorage (Web / Vite preview)
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && parsed.stationId && parsed.stationId !== 'SETUP REQUIRED') {
+        if (parsed && parsed.stationId) {
           return {
             stationId: parsed.stationId,
-            hardwareId: parsed.hardwareId || parsed.stationId,
-            stationName: parsed.stationName || 'Grab n Go Bar Kiosk 01',
+            hardwareId: parsed.hardwareId || getTerminalHardwareId(),
+            stationName: parsed.stationName || ENV.stationName,
             totalDoors: Number(parsed.totalDoors || 16),
             locationTag: parsed.locationTag || 'Level 1, Main Entrance',
             doorSizes: parsed.doorSizes || null,
-            bindingStatus: parsed.bindingStatus || 'BOUND_ACTIVE',
-            operatorName: parsed.operatorName || 'Demo Operator',
+            bindingStatus: parsed.bindingStatus || (parsed.stationId && parsed.stationId !== 'SETUP REQUIRED' ? 'BOUND_ACTIVE' : 'UNBOUND'),
+            operatorName: parsed.operatorName || 'Carlos Test',
           };
         }
       }
-
-      // Static machine identity for Web preview / Netlify testing:
-      // Permanently bound so web testers do not need to bind or pair
-      const staticDemo = {
-        stationId: 'SLL-76138',
-        hardwareId: 'SLL-76138',
-        stationName: 'Grab n Go Bar Kiosk 01',
-        totalDoors: 16,
-        locationTag: 'Level 1, Main Entrance',
-        doorSizes: null,
-        bindingStatus: 'BOUND_ACTIVE',
-        operatorName: 'Demo Operator',
-      };
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(staticDemo));
-      return staticDemo;
     }
   } catch (err) {
     console.warn('[Storage] localStorage lookup failed:', err);
   }
 
-  // 3. Fallback to .env defaults (Native APK fallback when not yet configured)
+  // 3. Fallback to .env defaults
   const hardwareId = getTerminalHardwareId();
   return {
     stationId: ENV.stationId || 'SETUP REQUIRED',

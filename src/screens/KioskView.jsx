@@ -23,15 +23,13 @@ import { ENV } from '../config/env';
 //   HOME -> PICKUP_PIN -> DOOR_OPENED -> HOME
 // ==============================================================================
 export function KioskView() {
-  const isWeb = typeof window !== 'undefined';
-
   // Dynamic Station Profile (persisted across reboots via SharedPreferences/localStorage)
   const [machineConfig, setMachineConfig] = useState({
-    stationId: isWeb ? 'SLL-76138' : (ENV.stationId || 'SETUP REQUIRED'),
-    stationName: isWeb ? 'Grab n Go Bar Kiosk 01' : (ENV.stationName || 'Unprovisioned Locker Station'),
+    stationId: ENV.stationId || 'SETUP REQUIRED',
+    stationName: ENV.stationName || 'Unprovisioned Locker Station',
     totalDoors: 16,
-    hardwareId: isWeb ? 'SLL-76138' : getTerminalHardwareId(),
-    bindingStatus: isWeb ? 'BOUND_ACTIVE' : 'UNBOUND',
+    hardwareId: getTerminalHardwareId(),
+    bindingStatus: 'UNBOUND',
   });
 
   const stationId = machineConfig.stationId;
@@ -66,8 +64,8 @@ export function KioskView() {
       try {
         const res = await pollPairingStatus(activeTerminalId);
         if (isMounted && res && res.success) {
-          // 1. If station was completely deleted/truncated from database, reset kiosk (Native APK only)
-          if ((res.exists === false || res.bindingStatus === 'UNREGISTERED') && !isWeb) {
+          // 1. If station was completely deleted/truncated from database, reset kiosk
+          if (res.exists === false || res.bindingStatus === 'UNREGISTERED') {
             if (machineConfig.stationId && machineConfig.stationId !== 'SETUP REQUIRED') {
               console.log('[KioskView] Station not found in database. Auto-resetting kiosk to SETUP REQUIRED.');
               const resetConfig = {
@@ -266,8 +264,10 @@ export function KioskView() {
         ...prev,
         customerName: contactData.customerName,
         contactNumber: contactData.contactNumber,
+        rawPhone: contactData.rawPhone || '',
         email: contactData.email || '',
         customerEmail: contactData.customerEmail || contactData.email || '',
+        privacyAccepted: Boolean(contactData.privacyAccepted),
       };
     });
     setCurrentStep('DROPOFF_PREFERENCE');

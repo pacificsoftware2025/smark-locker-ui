@@ -42,16 +42,6 @@ export async function submitDropoffOrder(payload) {
     } else {
       const errData = await response.json().catch(() => ({}));
       console.warn('[Kiosk API] Server returned error:', errData.message);
-      // On web preview / Netlify: simulate drop-off success so the entire kiosk workflow can be tested
-      if (typeof window !== 'undefined') {
-        console.log('[Kiosk API] Web preview testing: simulating successful dropoff order.');
-        return {
-          success: true,
-          orderId: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-          compartmentNumber: payload.compartmentNumber || '03',
-          isOfflineMode: true,
-        };
-      }
       return {
         success: false,
         message: errData.message || 'No available locker compartments at this station.',
@@ -60,15 +50,6 @@ export async function submitDropoffOrder(payload) {
     }
   } catch (err) {
     console.warn('[Kiosk API] Server unreachable:', err.message);
-    if (typeof window !== 'undefined') {
-      console.log('[Kiosk API] Web preview testing: simulating successful dropoff order.');
-      return {
-        success: true,
-        orderId: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
-        compartmentNumber: payload.compartmentNumber || '03',
-        isOfflineMode: true,
-      };
-    }
     return {
       success: false,
       message: 'Network connection issue. Please check kiosk internet.',

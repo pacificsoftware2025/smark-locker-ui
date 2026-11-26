@@ -2,20 +2,18 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from '../src/App';
 
-// Pre-seed an active demo station in browser localStorage if unconfigured
-// so that the web preview / Netlify site is immediately testable without setup blocks
+// Clear any leftover hardcoded demo config ('SLL-76138') from browser localStorage
 if (typeof window !== 'undefined' && window.localStorage) {
-  const existing = window.localStorage.getItem('SMART_LOCKER_STATION_CONFIG');
-  if (!existing || existing.includes('SETUP REQUIRED')) {
-    window.localStorage.setItem('SMART_LOCKER_STATION_CONFIG', JSON.stringify({
-      stationId: 'SLL-76138',
-      hardwareId: 'SLL-76138',
-      stationName: 'Grab n Go Bar Kiosk 01',
-      totalDoors: 16,
-      bindingStatus: 'BOUND_ACTIVE',
-      locationTag: 'Level 1, Main Entrance',
-      operatorName: 'Demo Operator',
-    }));
+  try {
+    const existing = window.localStorage.getItem('SMART_LOCKER_STATION_CONFIG');
+    if (existing) {
+      const parsed = JSON.parse(existing);
+      if (parsed && parsed.stationId === 'SLL-76138' && parsed.stationName === 'Grab n Go Bar Kiosk 01') {
+        window.localStorage.removeItem('SMART_LOCKER_STATION_CONFIG');
+      }
+    }
+  } catch (e) {
+    // Ignore storage parse errors
   }
 }
 

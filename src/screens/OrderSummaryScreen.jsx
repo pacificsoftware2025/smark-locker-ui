@@ -37,10 +37,12 @@ export function OrderSummaryScreen(props) {
   const customerName = orderData.customerName || 'Customer';
   const customerEmail = orderData.email || orderData.customerEmail || '';
 
-  // Clean formatting for 11-digit Philippine mobile number
+  // Clean formatting for Philippine mobile number (+639XXXXXXXXX or 09XXXXXXXXX)
   let rawPhone = String(orderData.contactNumber || '').trim();
   let formattedPhone = rawPhone;
-  if (rawPhone.length === 11 && rawPhone.startsWith('09')) {
+  if (rawPhone.length === 13 && rawPhone.startsWith('+63')) {
+    formattedPhone = `+63 ${rawPhone.slice(3, 6)} ${rawPhone.slice(6, 9)} ${rawPhone.slice(9)}`;
+  } else if (rawPhone.length === 11 && rawPhone.startsWith('09')) {
     formattedPhone = `${rawPhone.slice(0, 4)} ${rawPhone.slice(4, 7)} ${rawPhone.slice(7)}`;
   } else if (!rawPhone) {
     formattedPhone = 'Not provided';
