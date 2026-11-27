@@ -200,3 +200,214 @@ export async function getAllOperators() {
     createdAt: row.created_at,
   }));
 }
+
+// ==============================================================================
+// RIDER / DRIVER AUTHENTICATION & ACCOUNT SERVICE
+// ==============================================================================
+
+let ridersTableEnsured = false;
+
+/**
+ * Ensures the `riders` table exists in PostgreSQL automatically on first Rider auth request.
+ */
+export async function ensureRidersTable() {
+  if (ridersTableEnsured) return;
+  await query(`
+    CREATE TABLE IF NOT EXISTS riders (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(150) NOT NULL,
+      email VARCHAR(150) UNIQUE NOT NULL,
+      phone VARCHAR(20),
+      password_hash VARCHAR(255) NOT NULL,
+      vehicle_plate VARCHAR(100) DEFAULT 'Assigned Fleet Van',
+      assigned_route VARCHAR(150) DEFAULT 'Metro Central Route',
+      status VARCHAR(20) NOT NULL DEFAULT 'active',
+      last_login_at TIMESTAMP WITH TIME ZONE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS idx_riders_email ON riders(email);`);
+  ridersTableEnsured = true;
+}
+
+/**
+ * Generates an opaque session authentication token for a Rider (`sll_rd_<id>_...`).
+ */
+export function generateRiderSessionToken(riderId) {
+  const randomHex = crypto.randomBytes(24).toString('hex');
+  return `sll_rd_${riderId}_${Date.now()}_${randomHex}`;
+}
+
+/**
+ * Registers a new rider / delivery driver account in PostgreSQL.
+ */
+export async function registerRider({ name, email, phone, password, vehiclePlate, assignedRoute }) {
+  await ensureRidersTable();
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const cleanName = name.trim();
+  const cleanPhone = phone && phone.trim() !== '' ? phone.trim() : null;
+  const cleanPlate = vehiclePlate && vehiclePlate.trim() !== '' ? vehiclePlate.trim() : 'Assigned Fleet Van';
+  const cleanRoute = assignedRoute && assignedRoute.trim() !== '' ? assignedRoute.trim() : 'Metro Central Route';
+
+  // 1. Check duplicate email
+  const existingCheck = await query(
+    'SELECT id FROM riders WHERE LOWER(email) = $1',
+    [normalizedEmail]
+  );
+  if (existingCheck.rows.length > 0) {
+    const error = new Error('A rider account with this email address already exists');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  // 2. Hash password with PBKDF2 SHA-512
+  const passwordHash = hashPassword(password);
+
+  // 3. Insert new rider record
+  const insertResult = await query(
+    `INSERT INTO riders (name, email, phone, password_hash, vehicle_plate, assigned_route, status)
+     VALUES ($1, $2, $3, $4, $5, $6, 'active')
+     RETURNING id, name, email, phone, vehicle_plate, assigned_route, status, created_at, updated_at`,
+    [cleanName, normalizedEmail, cleanPhone, passwordHash, cleanPlate, cleanRoute]
+  );
+
+  const newRider = insertResult.rows[0];
+  const token = generateRiderSessionToken(newRider.id);
+
+  return {
+    rider: {
+      id: newRider.id,
+      name: newRider.name,
+      email: newRider.email,
+      phone: newRider.phone,
+      vehiclePlate: newRider.vehicle_plate,
+      assignedRoute: newRider.assigned_route,
+      status: newRider.status,
+      createdAt: newRider.created_at,
+    },
+    token,
+  };
+}
+
+/**
+ * Authenticates a rider by email and password.
+ */
+export async function authenticateRider(email, password) {
+  await ensureRidersTable();
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // 1. Query rider by email
+  const riderResult = await query(
+    `SELECT id, name, email, phone, password_hash, vehicle_plate, assigned_route, status, last_login_at
+     FROM riders
+     WHERE LOWER(email) = $1`,
+    [normalizedEmail]
+  );
+
+  if (riderResult.rows.length === 0) {
+    const error = new Error('Invalid email or password');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const rider = riderResult.rows[0];
+
+  // 2. Check active account status
+  if (rider.status !== 'active') {
+    const error = new Error(`Rider account is ${rider.status}. Please contact system administrator.`);
+    error.statusCode = 403;
+    throw error;
+  }
+
+  // 3. Verify password
+  const isPasswordValid = verifyPassword(password, rider.password_hash);
+  if (!isPasswordValid) {
+    const error = new Error('Invalid email or password');
+    error.statusCode = 401;
+    throw error;
+  }
+
+  // 4. Upgrade legacy seed plaintext password to PBKDF2 hash on first login
+  if (!rider.password_hash.includes(':')) {
+    const newHash = hashPassword(password);
+    await query('UPDATE riders SET password_hash = $1 WHERE id = $2', [newHash, rider.id]);
+  }
+
+  // 5. Record login timestamp
+  const now = new Date();
+  await query('UPDATE riders SET last_login_at = $1, updated_at = $1 WHERE id = $2', [now, rider.id]);
+
+  const token = generateRiderSessionToken(rider.id);
+
+  return {
+    rider: {
+      id: rider.id,
+      name: rider.name,
+      email: rider.email,
+      phone: rider.phone,
+      vehiclePlate: rider.vehicle_plate,
+      assignedRoute: rider.assigned_route,
+      status: rider.status,
+      lastLoginAt: now,
+    },
+    token,
+  };
+}
+
+/**
+ * Retrieves a single rider profile by primary key ID.
+ */
+export async function getRiderById(riderId) {
+  await ensureRidersTable();
+
+  const result = await query(
+    `SELECT id, name, email, phone, vehicle_plate, assigned_route, status, last_login_at, created_at
+     FROM riders WHERE id = $1`,
+    [riderId]
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  const r = result.rows[0];
+  return {
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    phone: r.phone,
+    vehiclePlate: r.vehicle_plate,
+    assignedRoute: r.assigned_route,
+    status: r.status,
+    lastLoginAt: r.last_login_at,
+    createdAt: r.created_at,
+  };
+}
+
+/**
+ * Lists all registered riders for fleet management.
+ */
+export async function getAllRiders() {
+  await ensureRidersTable();
+
+  const result = await query(
+    `SELECT id, name, email, phone, vehicle_plate, assigned_route, status, last_login_at, created_at
+     FROM riders
+     ORDER BY id ASC`
+  );
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    vehiclePlate: row.vehicle_plate,
+    assignedRoute: row.assigned_route,
+    status: row.status,
+    lastLoginAt: row.last_login_at,
+    createdAt: row.created_at,
+  }));
+}

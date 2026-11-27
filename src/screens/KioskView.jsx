@@ -13,7 +13,7 @@ import { openLockerDoor } from '../native/LockerBridge';
 import { submitDropoffOrder, fetchStationAvailability, pollPairingStatus, confirmPairingHandshake } from '../services/api';
 import { loadMachineConfig, saveMachineConfig, getTerminalHardwareId } from '../services/storage';
 import { COLORS } from '../theme/colors';
-import { ENV } from '../config/env';
+import { ENV, IS_WEB_STATIC_DEMO } from '../config/env';
 
 // ==============================================================================
 // REACT NATIVE COMPONENT: KioskView
@@ -23,13 +23,13 @@ import { ENV } from '../config/env';
 //   HOME -> PICKUP_PIN -> DOOR_OPENED -> HOME
 // ==============================================================================
 export function KioskView() {
-  // Dynamic Station Profile (persisted across reboots via SharedPreferences/localStorage)
+  // Dynamic Station Profile (uses temporary static web station ONLY if IS_WEB_STATIC_DEMO is true)
   const [machineConfig, setMachineConfig] = useState({
-    stationId: ENV.stationId || 'SETUP REQUIRED',
-    stationName: ENV.stationName || 'Unprovisioned Locker Station',
+    stationId: IS_WEB_STATIC_DEMO ? ENV.webStaticStationId : (ENV.stationId || 'SETUP REQUIRED'),
+    stationName: IS_WEB_STATIC_DEMO ? ENV.webStaticStationName : (ENV.stationName || 'Unprovisioned Locker Station'),
     totalDoors: 16,
-    hardwareId: getTerminalHardwareId(),
-    bindingStatus: 'UNBOUND',
+    hardwareId: IS_WEB_STATIC_DEMO ? ENV.webStaticStationId : getTerminalHardwareId(),
+    bindingStatus: IS_WEB_STATIC_DEMO ? 'BOUND_ACTIVE' : 'UNBOUND',
   });
 
   const stationId = machineConfig.stationId;
@@ -65,7 +65,8 @@ export function KioskView() {
         const res = await pollPairingStatus(activeTerminalId);
         if (isMounted && res && res.success) {
           // 1. If station was completely deleted/truncated from database, reset kiosk
-          if (res.exists === false || res.bindingStatus === 'UNREGISTERED') {
+          // (Skipped when temporary web static demo mode is enabled)
+          if ((res.exists === false || res.bindingStatus === 'UNREGISTERED') && !IS_WEB_STATIC_DEMO) {
             if (machineConfig.stationId && machineConfig.stationId !== 'SETUP REQUIRED') {
               console.log('[KioskView] Station not found in database. Auto-resetting kiosk to SETUP REQUIRED.');
               const resetConfig = {
@@ -397,6 +398,7 @@ export function KioskView() {
     setSessionOrder(function (prev) {
       return {
         ...prev,
+        orderId: orderData.orderId || prev.orderId || '',
         assignedBox: orderData.assignedBox || '05',
         customerName: orderData.customerName || 'Customer',
       };
@@ -473,6 +475,7 @@ export function KioskView() {
             stationId={stationId}
             assignedBox={sessionOrder.assignedBox}
             orderId={sessionOrder.orderId}
+            customerName={sessionOrder.customerName}
             onFinish={handleResetToHome}
           />
         )}

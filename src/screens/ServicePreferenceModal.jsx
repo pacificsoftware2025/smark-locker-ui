@@ -8,10 +8,19 @@ import {
   ScrollView, 
   StyleSheet,
   ActivityIndicator,
-  Alert
+  Alert,
+  Platform,
 } from 'react-native';
-import { COLORS, FONTS } from '../theme';
+import { COLORS } from '../theme';
 import { LAUNDRY_SERVICES, LOAD_SIZES } from '../constants/laundry';
+
+// Same Plus Jakarta Sans font family used in OrderSummaryScreen
+const FONT_FAMILY = Platform.select({
+  web: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+  android: 'sans-serif',
+  ios: 'system-ui',
+  default: 'sans-serif',
+});
 
 // ==============================================================================
 // REACT NATIVE COMPONENT: ServicePreferenceModal
@@ -440,6 +449,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   stationText: {
+    fontFamily: FONT_FAMILY,
     fontSize: 11,
     fontWeight: '800',
     color: COLORS.emeraldDark,
@@ -453,20 +463,20 @@ const styles = StyleSheet.create({
     borderRadius: 9999,
   },
   boxText: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.slate800,
   },
   modalTitle: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 20,
     fontWeight: '900',
     color: COLORS.slate900,
     letterSpacing: -0.5,
   },
   modalSub: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 13,
     color: COLORS.slate600,
   },
@@ -482,7 +492,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   closeBtnText: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 18,
     fontWeight: '700',
     color: COLORS.slate700,
@@ -500,14 +510,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   sectionLabel: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 11,
     fontWeight: '800',
     color: COLORS.slate800,
     letterSpacing: 0.5,
   },
   weighedTag: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.orange,
@@ -566,13 +576,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   tileName: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 15,
     fontWeight: '800',
     color: COLORS.slate900,
   },
   tileDesc: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 12,
     color: COLORS.slate600,
     lineHeight: 16,
@@ -591,7 +601,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.orangeBorder,
   },
   priceText: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 14,
     fontWeight: '800',
     color: COLORS.slate900,
@@ -637,7 +647,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   sizeFullBadgeText: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 9,
     fontWeight: '900',
     color: '#ffffff',
@@ -650,7 +660,7 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
   },
   sizeLabel: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 14,
     fontWeight: '800',
     color: COLORS.slate900,
@@ -659,7 +669,7 @@ const styles = StyleSheet.create({
     color: COLORS.orange,
   },
   sizeKg: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.slate500,
@@ -702,7 +712,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.emerald,
   },
   segmentText: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.slate600,
@@ -712,7 +722,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   instructionInput: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     minHeight: 80,
     borderWidth: 1.5,
     borderColor: COLORS.slate200,
@@ -745,13 +755,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   noticeTitle: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 13,
     fontWeight: '800',
     color: COLORS.slate900,
   },
   noticeSub: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 12,
     color: COLORS.slate600,
     lineHeight: 16,
@@ -784,13 +794,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   unlockBtnArrow: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 18,
     fontWeight: '900',
     color: COLORS.white,
   },
   unlockBtnText: {
-    fontFamily: FONTS.family,
+    fontFamily: FONT_FAMILY,
     fontSize: 16,
     fontWeight: '900',
     color: COLORS.white,

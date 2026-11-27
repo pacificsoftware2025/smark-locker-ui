@@ -4,6 +4,10 @@ import {
   handleLogin,
   handleGetMe,
   handleListOperators,
+  handleRegisterRider,
+  handleLoginRider,
+  handleGetRiderMe,
+  handleListRiders,
 } from '../controllers/auth.controller.js';
 
 // ==============================================================================
@@ -11,16 +15,16 @@ import {
 // ==============================================================================
 const router = Router();
 
-// Operator Registration
+// Operator Authentication & Directory
 router.post('/register', handleRegister);
-
-// Operator Login
 router.post('/login', handleLogin);
-
-// Current Operator Session Validation
 router.get('/me', handleGetMe);
-
-// List All Operators (Fleet Management)
 router.get('/operators', handleListOperators);
+
+// Rider / Delivery Driver Authentication & Directory
+router.post('/rider/register', handleRegisterRider);
+router.post('/rider/login', handleLoginRider);
+router.get('/rider/me', handleGetRiderMe);
+router.get('/riders', handleListRiders);
 
 export default router;

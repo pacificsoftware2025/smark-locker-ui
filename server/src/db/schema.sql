@@ -102,3 +102,20 @@ CREATE TABLE IF NOT EXISTS operators (
 
 CREATE INDEX IF NOT EXISTS idx_operators_email ON operators(email);
 CREATE INDEX IF NOT EXISTS idx_operators_station ON operators(locker_station_id);
+
+-- 6. Riders Table (Delivery Van Drivers & Field Operations Staff)
+CREATE TABLE IF NOT EXISTS riders (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(150) NOT NULL,
+  email VARCHAR(150) UNIQUE NOT NULL,
+  phone VARCHAR(20),
+  password_hash VARCHAR(255) NOT NULL,
+  vehicle_plate VARCHAR(100) DEFAULT 'Assigned Fleet Van',
+  assigned_route VARCHAR(150) DEFAULT 'Metro Central Route',
+  status VARCHAR(20) NOT NULL DEFAULT 'active',
+  last_login_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_riders_email ON riders(email);

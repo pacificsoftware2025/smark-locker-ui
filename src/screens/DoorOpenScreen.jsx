@@ -1,33 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Image,
+} from 'react-native';
 import { COLORS, FONTS } from '../theme';
 import { ENV } from '../config/env';
+import grabNGoLogo from '../assets/images/grabngo_logo.png';
 
 // ==============================================================================
-// REACT NATIVE COMPONENT: DoorOpenScreen
-// Step 2C & 3B: Physical locker door opened confirmation screen.
+// REACT NATIVE COMPONENT: DoorOpenScreen (GEMINI.md Rules 1, 2, 3 & 4)
+// Minimalist, user-friendly confirmation screen shown once the locker opens.
+// Retains the project's 3-color theme (Safety Orange, Slate, Emerald) on a
+// clean white canvas with zero visual clutter and zero emojis.
 //
 // In Vanilla JS:
-//   let countdown = 30;
-//   setInterval(() => {
-//     countdown--;
-//     if (countdown === 0) onFinish();
+//   let secondsRemaining = 30;
+//   const timerId = setInterval(() => {
+//     secondsRemaining--;
+//     if (secondsRemaining <= 0) onFinish();
 //   }, 1000);
 // ==============================================================================
+
 export function DoorOpenScreen(props) {
-  const assignedBox = props.assignedBox || '03';
-  const stationId = props.stationId || ENV.stationId;
+  const assignedBox = String(props.assignedBox || '03').padStart(2, '0');
+  const orderId = props.orderId || '';
   const onFinish = props.onFinish;
 
-  // Countdown before automatically returning to Home Screen
+  // useState stores the countdown seconds in memory and refreshes the text each second
   const [secondsRemaining, setSecondsRemaining] = useState(ENV.doorOpenTimeout);
 
+  // useEffect starts a 1-second timer when this screen appears and clears it on exit
   useEffect(function () {
     const timerId = setInterval(function () {
       setSecondsRemaining(function (prev) {
         if (prev <= 1) {
           clearInterval(timerId);
-          onFinish(); // Auto-reset back to Home Screen
+          if (onFinish) {
+            onFinish();
+          }
           return 0;
         }
         return prev - 1;
@@ -39,88 +52,77 @@ export function DoorOpenScreen(props) {
     };
   }, [onFinish]);
 
+  // Acts like button.addEventListener('click', ...) in Vanilla JS
+  function handleDoneClick() {
+    if (onFinish) {
+      onFinish();
+    }
+  }
+
   return (
     <View style={styles.container}>
-      
-      {/* ------------------------------------------------------------- */}
-      {/* TOP BAR: Station Indicator & Countdown Pill                   */}
-      {/* ------------------------------------------------------------- */}
+      {/* 1. Minimal Header: Brand Logo & Calm Countdown Pill */}
       <View style={styles.topBar}>
-        <View style={styles.stationBadge}>
-          <View style={styles.livePulseDot} />
-          <Text style={styles.stationText}>{stationId} &bull; Compartment Active</Text>
-        </View>
+        <Image
+          source={grabNGoLogo}
+          style={styles.brandLogo}
+          resizeMode="contain"
+        />
 
-        <View style={styles.countdownPill}>
-          <Text style={styles.countdownText}>Auto-reset in {secondsRemaining}s</Text>
+        <View style={styles.timerPill}>
+          <Text style={styles.timerText}>Auto-close in {secondsRemaining}s</Text>
         </View>
       </View>
 
-      {/* ------------------------------------------------------------- */}
-      {/* MAIN CONTENT: Headline & 2-Step Deposit Instructions          */}
-      {/* ------------------------------------------------------------- */}
-      <View style={styles.content}>
-        
-        {/* Compartment Number Indicator */}
-        <View style={styles.boxNumberCircle}>
-          <Text style={styles.boxNumberLarge}>{assignedBox}</Text>
-          <Text style={styles.boxNumberSub}>OPEN</Text>
+      {/* 2. Clean Centered Content */}
+      <View style={styles.centerContent}>
+        {/* Minimalist Compartment Number Tile */}
+        <View style={styles.doorBadge}>
+          <Text style={styles.doorNumber}>{assignedBox}</Text>
         </View>
 
-        <Text style={styles.headline}>Compartment #{assignedBox} Is Open</Text>
-
-        <View style={styles.statusPill}>
-          <Text style={styles.statusPillIcon}>✓</Text>
-          <Text style={styles.statusPillText}>Solenoid Latch Released</Text>
-        </View>
-
-        {/* 2-Step Instructions Card */}
-        <View style={styles.instructionsCard}>
-          
-          <View style={styles.stepItem}>
-            <View style={styles.stepNumCircle}>
-              <Text style={styles.stepNumText}>1</Text>
-            </View>
-            <View style={styles.stepTextCol}>
-              <Text style={styles.stepTitle}>Deposit your laundry bag</Text>
-              <Text style={styles.stepDetail}>Place all items neatly inside Compartment #{assignedBox}.</Text>
-            </View>
-          </View>
-
-          <View style={styles.stepDivider} />
-
-          <View style={styles.stepItem}>
-            <View style={styles.stepNumCircle}>
-              <Text style={styles.stepNumText}>2</Text>
-            </View>
-            <View style={styles.stepTextCol}>
-              <Text style={styles.stepTitle}>Push door firmly closed</Text>
-              <Text style={styles.stepDetail}>Push until you hear the mechanical lock click shut.</Text>
-            </View>
-          </View>
-
-        </View>
-
-        <Text style={styles.smsNote}>
-          An SMS receipt with your tracking details has been sent to your phone.
+        <Text style={styles.title}>Door #{assignedBox} is Open</Text>
+        <Text style={styles.subtitle}>
+          Place or collect your laundry, then push the door shut.
         </Text>
 
+        {/* Simple 2-Step Guide */}
+        <View style={styles.stepsBox}>
+          <View style={styles.stepRow}>
+            <View style={styles.stepNum}>
+              <Text style={styles.stepNumText}>1</Text>
+            </View>
+            <Text style={styles.stepText}>Place your laundry bag neatly inside</Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.stepRow}>
+            <View style={styles.stepNum}>
+              <Text style={styles.stepNumText}>2</Text>
+            </View>
+            <Text style={styles.stepText}>Push the door firmly until it clicks shut</Text>
+          </View>
+        </View>
+
+        {Boolean(orderId) && (
+          <Text style={styles.helperNote}>Order {orderId}</Text>
+        )}
       </View>
 
-      {/* ------------------------------------------------------------- */}
-      {/* FOOTER BUTTON                                                 */}
-      {/* ------------------------------------------------------------- */}
+      {/* 3. Primary Theme CTA Button */}
       <View style={styles.footer}>
         <TouchableOpacity
           activeOpacity={0.85}
-          onPress={onFinish}
-          style={styles.finishBtn}
+          onPress={handleDoneClick}
+          style={styles.doneBtn}
         >
-          <Text style={styles.finishBtnText}>I've Closed the Locker Door</Text>
-          <Text style={styles.finishBtnArrow}>→</Text>
+          <Text style={styles.doneBtnText}>{"I've Closed the Door"}</Text>
+          <View style={styles.arrowCircle}>
+            <Text style={styles.arrowText}>→</Text>
+          </View>
         </TouchableOpacity>
       </View>
-
     </View>
   );
 }
@@ -130,202 +132,165 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.white,
     paddingHorizontal: 24,
-    paddingVertical: 28,
+    paddingTop: 20,
+    paddingBottom: 24,
     justifyContent: 'space-between',
   },
+
+  // Minimal Top Bar
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.slate200,
   },
-  stationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.emeraldSubtle,
-    borderWidth: 1,
-    borderColor: COLORS.emeraldBorder,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 9999,
+  brandLogo: {
+    width: 118,
+    height: 36,
   },
-  livePulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.emerald,
-    marginRight: 6,
-  },
-  stationText: {
-    fontFamily: FONTS.family,
-    fontSize: 12,
-    fontWeight: '800',
-    color: COLORS.emeraldDark,
-  },
-  countdownPill: {
+  timerPill: {
     backgroundColor: COLORS.slate100,
-    borderWidth: 1,
-    borderColor: COLORS.slate200,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 9999,
   },
-  countdownText: {
+  timerText: {
     fontFamily: FONTS.family,
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.slate600,
   },
-  content: {
+
+  // Centered Hero & Minimal Steps
+  centerContent: {
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingHorizontal: 4,
   },
-  boxNumberCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 24,
-    backgroundColor: COLORS.emeraldSubtle,
+  doorBadge: {
+    width: 92,
+    height: 92,
+    borderRadius: 26,
+    backgroundColor: COLORS.orangeSubtle,
     borderWidth: 2,
-    borderColor: COLORS.emerald,
+    borderColor: COLORS.orange,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 18,
   },
-  boxNumberLarge: {
+  doorNumber: {
     fontFamily: FONTS.family,
-    fontSize: 34,
+    fontSize: 36,
     fontWeight: '900',
-    color: COLORS.emeraldDark,
+    color: COLORS.orange,
     letterSpacing: -1,
-    lineHeight: 38,
   },
-  boxNumberSub: {
+  title: {
     fontFamily: FONTS.family,
-    fontSize: 10,
-    fontWeight: '900',
+    fontSize: 26,
+    fontWeight: '800',
     color: COLORS.emerald,
-    letterSpacing: 1,
-  },
-  headline: {
-    fontFamily: FONTS.family,
-    fontSize: 28,
-    fontWeight: '900',
-    color: COLORS.slate900,
     letterSpacing: -0.5,
+    textAlign: 'center',
     marginBottom: 6,
   },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.emeraldSubtle,
-    borderWidth: 1,
-    borderColor: COLORS.emeraldBorder,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 9999,
-    gap: 6,
-    marginBottom: 24,
-  },
-  statusPillIcon: {
-    color: COLORS.emeraldDark,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  statusPillText: {
+  subtitle: {
     fontFamily: FONTS.family,
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.emeraldDark,
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.slate500,
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 300,
+    marginBottom: 28,
   },
-  instructionsCard: {
+
+  // Minimal 2-Step Card
+  stepsBox: {
     width: '100%',
     backgroundColor: COLORS.slate50,
-    borderWidth: 1.5,
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderWidth: 1,
     borderColor: COLORS.slate200,
-    borderRadius: 20,
-    padding: 18,
-    gap: 14,
     marginBottom: 16,
   },
-  stepItem: {
+  stepRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
   },
-  stepNumCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: COLORS.slate900,
+  stepNum: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.orange,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
   },
   stepNumText: {
     fontFamily: FONTS.family,
-    fontSize: 13,
-    fontWeight: '900',
+    fontSize: 12,
+    fontWeight: '800',
     color: COLORS.white,
   },
-  stepTextCol: {
+  stepText: {
+    fontFamily: FONTS.family,
     flex: 1,
-    gap: 2,
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.slate800,
   },
-  stepTitle: {
-    fontFamily: FONTS.family,
-    fontSize: 15,
-    fontWeight: '800',
-    color: COLORS.slate900,
-  },
-  stepDetail: {
-    fontFamily: FONTS.family,
-    fontSize: 13,
-    color: COLORS.slate600,
-    lineHeight: 18,
-  },
-  stepDivider: {
+  divider: {
     height: 1,
     backgroundColor: COLORS.slate200,
+    marginVertical: 12,
   },
-  smsNote: {
+  helperNote: {
     fontFamily: FONTS.family,
-    fontSize: 13,
-    color: COLORS.slate500,
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.slate400,
     textAlign: 'center',
-    lineHeight: 18,
   },
+
+  // Bottom CTA Button
   footer: {
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.slate200,
+    paddingTop: 8,
   },
-  finishBtn: {
-    minHeight: 58,
-    borderRadius: 18,
-    backgroundColor: COLORS.emerald,
-    borderWidth: 1,
-    borderColor: COLORS.emeraldDark,
+  doneBtn: {
+    minHeight: 56,
+    borderRadius: 16,
+    backgroundColor: COLORS.orange,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    shadowColor: COLORS.emerald,
+    gap: 10,
+    shadowColor: COLORS.orange,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.24,
     shadowRadius: 10,
     elevation: 3,
   },
-  finishBtnText: {
+  doneBtnText: {
     fontFamily: FONTS.family,
-    fontSize: 16,
-    fontWeight: '900',
+    fontSize: 15.5,
+    fontWeight: '800',
     color: COLORS.white,
   },
-  finishBtnArrow: {
-    fontSize: 18,
-    fontWeight: '900',
+  arrowCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255, 255, 255, 0.24)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowText: {
+    fontFamily: FONTS.family,
+    fontSize: 14,
+    fontWeight: '800',
     color: COLORS.white,
+    marginLeft: 1,
+    marginTop: -1,
   },
 });

@@ -1,4 +1,4 @@
-import { ENV } from '../config/env';
+import { ENV, IS_WEB_STATIC_DEMO } from '../config/env';
 
 // ==============================================================================
 // KIOSK API CLIENT SERVICE
@@ -42,6 +42,15 @@ export async function submitDropoffOrder(payload) {
     } else {
       const errData = await response.json().catch(() => ({}));
       console.warn('[Kiosk API] Server returned error:', errData.message);
+      // Reversible Web Static Demo fallback: allows end-to-end Netlify testing without DB seeding
+      if (IS_WEB_STATIC_DEMO && payload.stationId === ENV.webStaticStationId) {
+        return {
+          success: true,
+          orderId: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
+          compartmentNumber: payload.compartmentNumber || '03',
+          isOfflineMode: true,
+        };
+      }
       return {
         success: false,
         message: errData.message || 'No available locker compartments at this station.',
@@ -50,6 +59,14 @@ export async function submitDropoffOrder(payload) {
     }
   } catch (err) {
     console.warn('[Kiosk API] Server unreachable:', err.message);
+    if (IS_WEB_STATIC_DEMO && payload.stationId === ENV.webStaticStationId) {
+      return {
+        success: true,
+        orderId: `ORD-${Math.floor(1000 + Math.random() * 9000)}`,
+        compartmentNumber: payload.compartmentNumber || '03',
+        isOfflineMode: true,
+      };
+    }
     return {
       success: false,
       message: 'Network connection issue. Please check kiosk internet.',
@@ -70,6 +87,16 @@ export async function fetchStationAvailability(stationId = ENV.stationId) {
       totalAvailable: 0,
       isStationFull: false,
       sizeAvailability: { small: 0, medium: 0, large: 0 },
+    };
+  }
+
+  // Reversible Web Static Demo availability: prevents false "STATION FULL" when DB is truncated/unseeded
+  if (IS_WEB_STATIC_DEMO && stationId === ENV.webStaticStationId) {
+    return {
+      success: true,
+      totalAvailable: 16,
+      isStationFull: false,
+      sizeAvailability: { small: 4, medium: 8, large: 4 },
     };
   }
 
@@ -312,6 +339,22 @@ export async function syncStationConfig(config) {
 export async function pollPairingStatus(stationId) {
   if (!stationId || stationId === 'SETUP REQUIRED') {
     return { success: false, bindingStatus: 'UNBOUND' };
+  }
+
+  // Reversible Web Static Demo pairing status: keeps Netlify URL bound without cloud pairing
+  if (IS_WEB_STATIC_DEMO && stationId === ENV.webStaticStationId) {
+    return {
+      success: true,
+      stationId: ENV.webStaticStationId,
+      bindingStatus: 'BOUND_ACTIVE',
+      pairingCode: null,
+      stationName: ENV.webStaticStationName,
+      address: 'Level 1, Main Entrance',
+      totalDoors: 16,
+      total_compartments: 16,
+      exists: true,
+      operatorName: 'Demo Operator',
+    };
   }
 
   const url = `${ENV.apiBaseUrl}/stations/${encodeURIComponent(stationId)}/pairing-status`;

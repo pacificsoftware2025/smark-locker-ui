@@ -9,9 +9,11 @@
 //   };
 // ==============================================================================
 
+import { Platform } from 'react-native';
+
 export const ENV = {
   // 1. Backend Express API Endpoint (Hosted live on Render)
- apiBaseUrl: (typeof process !== 'undefined' && process.env && process.env.API_BASE_URL) || 'https://smart-laundry-locker-api.onrender.com/api',
+  apiBaseUrl: (typeof process !== 'undefined' && process.env && process.env.API_BASE_URL) || 'https://smart-laundry-locker-api.onrender.com/api',
 
   // 2. Kiosk Station Identity
   stationId: (typeof process !== 'undefined' && process.env && process.env.LOCKER_STATION_ID) || 'SETUP REQUIRED',
@@ -28,4 +30,14 @@ export const ENV = {
 
   // 5. Customer Service & Support Hotline
   supportHotline: (typeof process !== 'undefined' && process.env && process.env.SUPPORT_HOTLINE) || '(02) 8923-4567',
+
+  // 6. TEMPORARY REVERSIBLE WEB DEMO MODE (For sharing Netlify URL without setup/binding)
+  // HOW TO REVERT LATER: Simply change `enableWebStaticDemo: true` to `false`!
+  enableWebStaticDemo: true,
+  webStaticStationId: 'SLL-76138',
+  webStaticStationName: 'Grab n Go Bar Kiosk 01',
 };
+
+// Strictly true ONLY in Web Browser / Netlify (Platform.OS === 'web') AND when enableWebStaticDemo is true.
+// Always false on the physical Android APK (Platform.OS === 'android') or when reverted to false.
+export const IS_WEB_STATIC_DEMO = Platform.OS === 'web' && ENV.enableWebStaticDemo === true;

@@ -35,3 +35,8 @@ ON CONFLICT (station_id, box_number) DO NOTHING;
 INSERT INTO operators (name, email, phone, password_hash, status)
 VALUES ('Elena Rostova', 'elena@smartlocker.ph', '+639195553322', 'operator123', 'active')
 ON CONFLICT (email) DO NOTHING;
+
+-- Insert Default Rider: Marco Valdes
+INSERT INTO riders (name, email, phone, password_hash, vehicle_plate, assigned_route, status)
+VALUES ('Marco Valdes', 'marco@smartlocker.ph', '+639185557788', 'rider123', 'Van #04 (Route Metro)', 'Metro Central Route', 'active')
+ON CONFLICT (email) DO NOTHING;

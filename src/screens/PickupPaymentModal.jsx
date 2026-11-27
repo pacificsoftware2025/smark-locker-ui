@@ -8,7 +8,7 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
-import { COLORS } from '../theme/colors';
+import { COLORS, FONTS } from '../theme';
 import { confirmOrderPayment } from '../services/api';
 
 // ==============================================================================
@@ -250,12 +250,14 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   qrphBadgeText: {
+    fontFamily: FONTS.family,
     fontSize: 10,
     fontWeight: '800',
     color: COLORS.white,
     letterSpacing: 1.2,
   },
   boxPillText: {
+    fontFamily: FONTS.family,
     fontSize: 12,
     fontWeight: '800',
     color: COLORS.slate700,
@@ -265,12 +267,14 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   title: {
+    fontFamily: FONTS.family,
     fontSize: 22,
     fontWeight: '800',
     color: COLORS.slate900,
     textAlign: 'center',
   },
   subtitle: {
+    fontFamily: FONTS.family,
     fontSize: 12,
     color: COLORS.slate500,
     textAlign: 'center',
@@ -298,12 +302,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   invoiceLabel: {
+    fontFamily: FONTS.family,
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.slate500,
     letterSpacing: 0.5,
   },
   invoiceValue: {
+    fontFamily: FONTS.family,
     fontSize: 12,
     fontWeight: '700',
     color: COLORS.slate800,
@@ -315,11 +321,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   totalLabel: {
+    fontFamily: FONTS.family,
     fontSize: 13,
     fontWeight: '800',
     color: COLORS.slate900,
   },
   totalAmount: {
+    fontFamily: FONTS.family,
     fontSize: 20,
     fontWeight: '900',
     color: COLORS.orange,
@@ -351,6 +359,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   walletPill: {
+    fontFamily: FONTS.family,
     fontSize: 10,
     fontWeight: '700',
     color: COLORS.slate600,
@@ -387,11 +396,13 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.orange,
   },
   listeningText: {
+    fontFamily: FONTS.family,
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.orangeHover,
   },
   errorText: {
+    fontFamily: FONTS.family,
     fontSize: 11,
     color: '#dc2626',
     fontWeight: '700',
@@ -407,6 +418,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.slate300,
   },
   simulatePayBtnText: {
+    fontFamily: FONTS.family,
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.slate700,
@@ -421,6 +433,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   cancelBtnText: {
+    fontFamily: FONTS.family,
     fontSize: 13,
     fontWeight: '700',
     color: COLORS.slate500,
@@ -441,23 +454,27 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   successCheckmark: {
+    fontFamily: FONTS.family,
     fontSize: 38,
     fontWeight: '900',
     color: COLORS.emerald,
   },
   paidTitle: {
+    fontFamily: FONTS.family,
     fontSize: 22,
     fontWeight: '800',
     color: COLORS.slate900,
     marginBottom: 4,
   },
   paidAmount: {
+    fontFamily: FONTS.family,
     fontSize: 26,
     fontWeight: '900',
     color: COLORS.emeraldDark,
     marginBottom: 8,
   },
   paidSub: {
+    fontFamily: FONTS.family,
     fontSize: 14,
     fontWeight: '700',
     color: COLORS.slate600,

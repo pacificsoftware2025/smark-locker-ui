@@ -14,9 +14,9 @@ import { Platform } from 'react-native';
 // ==============================================================================
 export const FONTS = {
   family: Platform.select({
-    web: "'Inter', system-ui, -apple-system, sans-serif",
-    ios: 'Inter',
-    android: 'Inter',
+    web: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif",
+    android: 'sans-serif',
+    ios: 'system-ui',
     default: 'sans-serif',
   }),
 };

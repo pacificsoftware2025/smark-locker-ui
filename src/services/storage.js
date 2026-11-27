@@ -1,5 +1,5 @@
 import { getNativeMachineConfig, saveNativeMachineConfig } from '../native/LockerBridge';
-import { ENV } from '../config/env';
+import { ENV, IS_WEB_STATIC_DEMO } from '../config/env';
 
 const STORAGE_KEY = 'SMART_LOCKER_STATION_CONFIG';
 const TERMINAL_HARDWARE_ID_KEY = 'SMART_LOCKER_TERMINAL_HARDWARE_ID';
@@ -67,7 +67,21 @@ export async function loadMachineConfig() {
     console.warn('[Storage] localStorage lookup failed:', err);
   }
 
-  // 3. Fallback to .env defaults
+  // 3. Reversible Web Static Demo fallback (Active ONLY on Web when ENV.enableWebStaticDemo === true)
+  if (IS_WEB_STATIC_DEMO) {
+    return {
+      stationId: ENV.webStaticStationId,
+      hardwareId: ENV.webStaticStationId,
+      stationName: ENV.webStaticStationName,
+      totalDoors: 16,
+      locationTag: 'Level 1, Main Entrance',
+      doorSizes: null,
+      bindingStatus: 'BOUND_ACTIVE',
+      operatorName: 'Demo Operator',
+    };
+  }
+
+  // 4. Fallback to .env defaults (Android APK & dynamic mode)
   const hardwareId = getTerminalHardwareId();
   return {
     stationId: ENV.stationId || 'SETUP REQUIRED',
